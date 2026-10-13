@@ -25,7 +25,8 @@ function notice(message,error=false){$('notice').textContent=message;$('notice')
 function statusNotice(){
   if(publicSite){
     const dates=state.overview?.quoteDates;
-    notice(`${dates?`期貨 ${dates.futures||'未取得'} · 選擇權 ${dates.options||'未取得'} · 權證 ${dates.warrants||'未取得'}`:`台灣資料日 ${state.overview?.asOf||'未載入'}`} · 非即時行情 · 美國請使用官方行情入口`,!state.overview);
+    const partial=state.overview?.upstreamIssues?.length||0;
+    notice(`${dates?`期貨 ${dates.futures||'未取得'} · 選擇權 ${dates.options||'未取得'} · 權證 ${dates.warrants||'未取得'}`:`台灣資料日 ${state.overview?.asOf||'未載入'}`} · 非即時行情 · 美國請使用官方行情入口${partial?' · 部分來源未更新，保留前次有效資料':''}`,!state.overview||!!partial);
     return;
   }
   const failed=state.us?.sources?.filter(s=>s.status!=='ok').length||0;
@@ -184,6 +185,7 @@ function renderSources(){
     $('tw-source-time').textContent=`期貨：${dates.futures||'未取得'}；選擇權：${dates.options||'未取得'}；權證：${dates.warrants||'未取得'}。各商品的實際行情日期亦會逐筆標示。`;
     $('us-fetch-time').textContent='台北時間平日 19:17、週二至週六 06:17 排程更新；平台可能延遲。';
     $('source-status').textContent='台灣採官方日資料；美國採官方行情入口，公開站不提供美國原始行情下載。按「載入最新資料」可讀取最近一次成功發布的版本。';
+    if(state.overview?.upstreamIssues?.length)$('source-status').textContent+=` 本次 ${state.overview.upstreamIssues.length} 個來源未成功更新，相關商品保留原報價及日期。`;
     return;
   }
   $('us-fetch-time').textContent=`最近擷取：${localTime(state.us?.fetchedAt)}`;
