@@ -15,11 +15,17 @@ function remember(rows){for(const r of rows)rowMap.set(`${r.market}:${r.key}`,r)
 const rowId = r=>escape(`${r.market}:${r.key}`);
 function localTime(iso){return iso ? new Date(iso).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})+' 台北' : '—';}
 function quoteTime(r){return r.quoteTime ? localTime(r.quoteTime) : r.quoteTimeRaw ? `${r.quoteTimeRaw}（來源時間）` : r.priceDate || '無行情';}
-async function json(path){const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw new Error(`行情檔讀取失敗（${r.status}）`);return r.json();}
+async function json(path){
+  const compressed=publicSite&&typeof DecompressionStream==='function';
+  const r=await fetch(compressed?path+'.gz':path,{cache:'no-cache'});
+  if(!r.ok)throw new Error(`行情檔讀取失敗（${r.status}）`);
+  return compressed?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json():r.json();
+}
 function notice(message,error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
 function statusNotice(){
   if(publicSite){
-    notice(`台灣資料日 ${state.overview?.asOf||'未載入'} · 每日排程發布，非即時行情 · 美國請使用官方行情入口`,!state.overview);
+    const dates=state.overview?.quoteDates;
+    notice(`${dates?`期貨 ${dates.futures||'未取得'} · 選擇權 ${dates.options||'未取得'} · 權證 ${dates.warrants||'未取得'}`:`台灣資料日 ${state.overview?.asOf||'未載入'}`} · 非即時行情 · 美國請使用官方行情入口`,!state.overview);
     return;
   }
   const failed=state.us?.sources?.filter(s=>s.status!=='ok').length||0;
@@ -48,8 +54,8 @@ function spark(history){if(!history?.length)return '';const points=history.slice
 function renderOverview(){
   const tw=state.overview?.highlights||[],us=state.us?.futures||[];
   const rows=remember(state.market==='TW'?tw:state.market==='US'?us:publicSite?tw:[...tw.slice(0,1),...us]);
-  $('metrics').innerHTML=rows.slice(0,4).map(r=>`<article class="metric-card"><div class="metric-top"><span>${escape(r.name)}</span><span class="market-abbr">${r.market}</span></div><div class="metric-value">${fmt(r.price,4)}</div><div class="metric-bottom"><span class="${tone(r.changePct)}">${sign(r.changePct)}</span>${spark(r.history)}<span>${escape(r.contract)} · ${r.currency}</span></div></article>`).join('')||'<p class="empty">此市場尚無行情。</p>';
-  $('watch-rows').innerHTML=rows.map(r=>`<tr><td><strong>${escape(r.name)}</strong><small>${escape(r.contractName||r.key)}</small></td><td><span class="market-abbr">${r.market==='TW'?'台灣':'美國'}</span></td><td class="num">${fmt(r.price,4)}<small>${r.currency} · ${escape(r.priceType)}</small></td><td class="num ${tone(r.changePct)}">${sign(r.changePct)}</td><td class="num">${fmt(r.volume,0)}</td><td><small>${escape(quoteTime(r))}${r.stale?' · 保留舊資料':''}</small></td><td><button class="row-button" data-detail="${rowId(r)}">分析</button></td></tr>`).join('');
+  $('metrics').innerHTML=rows.slice(0,4).map(r=>`<article class="metric-card"><div class="metric-top"><span>${escape(r.name)}</span><span class="market-abbr">${r.market}</span></div><div class="metric-value">${fmt(r.price,4)}</div><div class="metric-bottom"><span class="${tone(r.changePct)}" title="${escape(r.previousPriceDate ? '比較 ' + r.previousPriceDate + ' 至 ' + r.priceDate : '來源漲跌幅')}">${sign(r.changePct)}</span>${spark(r.history)}<span>${escape(r.contract)} · ${r.currency}</span></div></article>`).join('')||'<p class="empty">此市場尚無行情。</p>';
+  $('watch-rows').innerHTML=rows.map(r=>`<tr><td><strong>${escape(r.name)}</strong><small>${escape(r.contractName||r.key)}</small></td><td><span class="market-abbr">${r.market==='TW'?'台灣':'美國'}</span></td><td class="num">${fmt(r.price,4)}<small>${r.currency} · ${escape(r.priceType)}</small></td><td class="num ${tone(r.changePct)}">${sign(r.changePct)}${r.previousPriceDate?`<small>自 ${escape(r.previousPriceDate)}</small>`:''}</td><td class="num">${fmt(r.volume,0)}</td><td><small>${escape(quoteTime(r))}${r.stale?' · 保留舊資料':''}</small></td><td><button class="row-button" data-detail="${rowId(r)}">分析</button></td></tr>`).join('');
   let positioning=state.overview?.options||{},title='台指選擇權結構';
   if(state.market==='US'){
     const spy=state.us?.options?.find(o=>o.symbol==='SPY');const expiry=spy?.rows.map(r=>r.expiry).sort()[0];const sums=putCallRatio(spy?.rows.filter(r=>r.expiry===expiry)||[]);
@@ -57,9 +63,9 @@ function renderOverview(){
   }
   document.querySelector('.market-structure h2').textContent=title;
   const {callOi=0,putOi=0,expiry}=positioning,total=callOi+putOi;
-  $('pcr-expiry').textContent=`最近到期 ${expiry||'—'} · 同一期別`;
-  $('pcr-value').textContent=callOi?fmt(putOi/callOi):'—';
-  $('ratio-bar').innerHTML=`<span style="width:${total?callOi/total*100:0}%;background:${colors[0]}"></span><span style="flex:1;background:${colors[1]}"></span>`;
+  $('pcr-expiry').textContent=`最近到期 ${expiry||'—'} · ${positioning.asOf||'同一期別'}`;
+  $('pcr-value').textContent=callOi&&finite(putOi)?fmt(putOi/callOi):'—';
+  $('ratio-bar').innerHTML=total?`<span style="width:${callOi/total*100}%;background:${colors[0]}"></span><span style="flex:1;background:${colors[1]}"></span>`:'';
   $('ratio-labels').innerHTML=`<span class="cyan">Call ${fmt(callOi,0)}</span><span class="purple">Put ${fmt(putOi,0)}</span>`;
   for(const kind of ['futures','options','warrants'])$(''+kind+'-count').textContent=fmt(state.overview?.counts[kind],0)+' 台灣商品';
   renderOverviewChart();
@@ -69,7 +75,7 @@ function renderOverviewChart(){
     $('chart-title').textContent='台指期貨月份結構';$('chart-legend').innerHTML='<span><i class="legend-dot cyan-bg"></i>各到期月份結算價</span>';
     const rows=(state.overview?.term||[]).filter(r=>finite(r.price));
     $('overview-chart').innerHTML=lineChart([{name:'台指期貨',points:rows.map(r=>({day:r.month,value:r.price}))}],{label:'台指期貨各月份結算價'});
-    $('chart-caption').textContent=`資料日 ${state.overview?.asOf||'—'} · 橫軸為到期月份，非歷史走勢。`;
+    $('chart-caption').textContent=`資料日 ${state.overview?.quoteDates?.futures||state.overview?.asOf||'—'} · 橫軸為到期月份，非歷史走勢。`;
   }else{
     $('chart-title').textContent='美國股指期貨走勢比較';
     const selected=(state.us?.futures||[]).filter(r=>['ES=F','NQ=F','YM=F'].includes(r.key));
@@ -121,8 +127,8 @@ function renderProducts(){
   const rows=scope.filter(r=>!cp||r.cp===cp).sort((a,b)=>sort==='expiry'?(a.expiry||'9999').localeCompare(b.expiry||'9999'):sort==='spread'?(spreadPercent(a)??Infinity)-(spreadPercent(b)??Infinity):(b[sort]??-1)-(a[sort]??-1));
   state.filtered=rows;const pages=Math.ceil(rows.length/25);state.page=Math.min(state.page,Math.max(0,pages-1));
   $('result-count').textContent=`${fmt(rows.length,0)} 筆結果`;
-  $('product-head').innerHTML=`<tr><th>商品 / 契約</th><th>市場 / 到期</th><th class="num">參考價</th>${kind!=='futures'?'<th class="num">履約價</th>':'<th class="num">漲跌幅</th>'}<th class="num">成交量</th><th class="num">${kind==='warrants'?'行使比例':'未平倉量'}</th><th class="num">價差率</th><th>資料時間</th><th></th></tr>`;
-  $('product-rows').innerHTML=rows.slice(state.page*25,state.page*25+25).map(r=>`<tr><td><strong>${escape(r.name)}</strong><small>${escape(r.key)}${r.cp?' · '+(r.cp==='C'?'Call':'Put'):''}</small></td><td>${r.market==='TW'?'台灣':'美國'}<small>${escape(r.expiry||r.month||r.contractName||'近月連續')}</small></td><td class="num">${fmt(r.price,4)}<small>${r.currency} · ${escape(r.priceType)}</small></td><td class="num ${kind==='futures'?tone(r.changePct):''}">${kind==='futures'?sign(r.changePct):fmt(r.strike)}</td><td class="num">${fmt(r.volume,0)}</td><td class="num">${fmt(kind==='warrants'?r.ratio:r.oi,kind==='warrants'?5:0)}</td><td class="num">${finite(spreadPercent(r))?fmt(spreadPercent(r))+'%':'—'}</td><td><small>${escape(quoteTime(r))}${r.stale?' · 舊資料':''}</small></td><td><button class="row-button" data-detail="${rowId(r)}">分析</button></td></tr>`).join('')||`<tr><td colspan="9" class="empty">${kind==='warrants'&&state.market==='US'?'美國區未提供台灣式上市權證，請切換至台灣市場。':'此篩選沒有符合商品，請調整條件。'}</td></tr>`;
+  $('product-head').innerHTML=`<tr><th>商品 / 契約</th><th>市場 / 到期</th><th class="num">參考價</th>${kind!=='futures'?'<th class="num">履約價</th>':'<th class="num">區間漲跌</th>'}<th class="num">成交量</th><th class="num">${kind==='warrants'?'行使比例':'未平倉量'}</th><th class="num">價差率</th><th>資料時間</th><th></th></tr>`;
+  $('product-rows').innerHTML=rows.slice(state.page*25,state.page*25+25).map(r=>`<tr><td><strong>${escape(r.name)}</strong><small>${escape(r.key)}${r.cp?' · '+(r.cp==='C'?'Call':'Put'):''}</small></td><td>${r.market==='TW'?'台灣':'美國'}<small>${escape(r.expiry||r.month||r.contractName||'近月連續')}</small></td><td class="num">${fmt(r.price,4)}<small>${r.currency} · ${escape(r.priceType)}</small></td><td class="num ${kind==='futures'?tone(r.changePct):''}">${kind==='futures'?sign(r.changePct):fmt(r.strike)}${kind==='futures'&&r.previousPriceDate?`<small>自 ${escape(r.previousPriceDate)}</small>`:''}</td><td class="num">${fmt(r.volume,0)}</td><td class="num">${fmt(kind==='warrants'?r.ratio:r.oi,kind==='warrants'?5:0)}</td><td class="num">${finite(spreadPercent(r))?fmt(spreadPercent(r))+'%':'—'}</td><td><small>${escape(quoteTime(r))}${r.stale?' · 舊資料':''}</small></td><td><button class="row-button" data-detail="${rowId(r)}">分析</button></td></tr>`).join('')||`<tr><td colspan="9" class="empty">${kind==='warrants'&&state.market==='US'?'美國區未提供台灣式上市權證，請切換至台灣市場。':'此篩選沒有符合商品，請調整條件。'}</td></tr>`;
   $('page-count').textContent=rows.length?`第 ${state.page+1} / ${pages} 頁 · 每頁 25 筆`:'沒有符合的行情';$('previous-page').disabled=state.page===0;$('next-page').disabled=state.page>=pages-1;
   if(kind==='options')renderDistribution(scope,under,expiry);
 }
@@ -174,6 +180,8 @@ function updateCalculator(){
 function renderSources(){
   $('tw-source-time').textContent=`台灣行情基準日：${state.overview?.asOf||'未取得'}。台灣行情由既有每日抓取與建置流程更新。`;
   if(publicSite){
+    const dates=state.overview?.quoteDates||{};
+    $('tw-source-time').textContent=`期貨：${dates.futures||'未取得'}；選擇權：${dates.options||'未取得'}；權證：${dates.warrants||'未取得'}。各商品的實際行情日期亦會逐筆標示。`;
     $('us-fetch-time').textContent='台北時間平日 19:17、週二至週六 06:17 排程更新；平台可能延遲。';
     $('source-status').textContent='台灣採官方日資料；美國採官方行情入口，公開站不提供美國原始行情下載。按「載入最新資料」可讀取最近一次成功發布的版本。';
     return;
