@@ -53,7 +53,7 @@ async function main(){
   const config=await read(resolve(root,'config/branch-watchlist.json'));
   const publicKey=await read(resolve(root,'config/branch-public-key.json'));
   if(!Array.isArray(config.symbols)||config.retention!==60)throw new Error('Invalid watchlist configuration');
-  const child=spawnSync(process.env.PYTHON||'python3',['automation/branches/collect.py','config/branch-watchlist.json'],{encoding:'utf8',timeout:270000,maxBuffer:2_000_000});
+  const child=spawnSync(process.env.PYTHON||'python3',['automation/branches/collect.py','config/branch-watchlist.json'],{encoding:'utf8',timeout:270000,maxBuffer:2_000_000,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
   let results;
   if(child.status!==0){results=config.symbols.map(symbol=>({symbol,error:'collector_failed'}));}
   else{
