@@ -1,4 +1,5 @@
 import { finite, spreadPercent, putCallRatio, payoff, breakEven, normalizedHistory } from './math.js';
+import { refreshBranches } from './branches.js';
 
 const $ = id => document.getElementById(id);
 const publicSite = document.body.dataset.deployment === 'static';
@@ -7,8 +8,9 @@ const fmt = (n,d=2) => finite(n) ? n.toLocaleString('zh-TW',{maximumFractionDigi
 const sign = n => finite(n) ? `${n>0?'+':''}${fmt(n)}%` : '—';
 const tone = n => n>0?'up':n<0?'down':'neutral';
 const colors = ['#68dfcf','#ac9bff','#e8be79'];
-const labels = {overview:'市場總覽',futures:'期貨分析',options:'選擇權分析',warrants:'權證篩選',calculator:'損益試算',sources:'資料來源'};
+const labels = {overview:'市場總覽',futures:'期貨分析',options:'選擇權分析',warrants:'權證篩選',branches:'券商分點',calculator:'損益試算',sources:'資料來源'};
 const descriptions = {overview:'期貨、選擇權與權證，在同一個視野。',futures:'對齊契約與計價幣別，觀察不同市場的價格。',options:'從履約價、到期日與流動性，拆解選擇權。',warrants:'從標的到條款，篩選台灣上市櫃權證。',calculator:'改變結算價，觀察每一筆交易的損益。',sources:'每個數字，都有來源與時間。'};
+descriptions.branches='每天累積個股分點排行，資料只在你的裝置解鎖查看。';
 const state = {market:'ALL',view:'overview',range:'3m',tw:{},overview:null,us:null,rows:[],filtered:[],page:0,selected:null,route:0};
 const rowMap = new Map();
 function remember(rows){for(const r of rows)rowMap.set(`${r.market}:${r.key}`,r);return rows;}
@@ -197,14 +199,16 @@ async function route(){
   $('page-title').innerHTML=labels[state.view]+'<span class="title-dot">.</span>';$('breadcrumb-current').textContent=labels[state.view];$('page-description').textContent=descriptions[state.view];
   const target=['futures','options','warrants'].includes(state.view)?'products':state.view;
   document.querySelectorAll('[data-view]').forEach(el=>el.hidden=el.dataset.view!==target);
-  document.querySelector('[aria-label="市場篩選"]').hidden=['calculator','sources'].includes(state.view);
+  document.querySelector('[aria-label="市場篩選"]').hidden=['calculator','sources','branches'].includes(state.view);
+  $('notice').hidden=state.view==='branches';
+  $('refresh-us').hidden=state.view==='branches';
   if(publicSite){
     $('public-us-links').hidden=state.market==='TW'||!['overview','futures','options'].includes(state.view);
     document.querySelector('.market-structure').hidden=state.market==='US';
     document.querySelector('.overview-grid').hidden=state.market==='US';
     $('metrics').hidden=state.market==='US';
   }
-  try{if(target==='products')await loadProducts(state.view);else if(target==='overview')renderOverview();else if(target==='sources')renderSources();else updateCalculator();}catch(e){notice(e.message+'；請重新載入或查看資料來源。',true);$('product-rows').innerHTML='<tr><td colspan="9" class="empty">讀取失敗，請稍後重試。</td></tr>';}
+  try{if(target==='products')await loadProducts(state.view);else if(target==='overview')renderOverview();else if(target==='sources')renderSources();else if(target==='branches')await refreshBranches();else updateCalculator();}catch(e){notice(e.message+'；請重新載入或查看資料來源。',true);$('product-rows').innerHTML='<tr><td colspan="9" class="empty">讀取失敗，請稍後重試。</td></tr>';}
 }
 document.addEventListener('click',e=>{
   const detail=e.target.closest('[data-detail]');if(detail){const r=rowMap.get(detail.dataset.detail);if(r)showDetail(r);}
