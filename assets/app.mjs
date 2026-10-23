@@ -44,13 +44,13 @@ async function load(name) {
   return cache.get(name);
 }
 
-function lineChart(points, label, percent = false) {
+function lineChart(points, label, percent = false, digits = percent ? 1 : 0) {
   const valid = points.filter(p => finite(p.value));
   if (valid.length < 2) return empty(`已累積 ${valid.length} 個資料日；滿兩日後顯示趨勢。每日自動累積，最多保留 60 個資料日。`);
   const width = 700, height = 230, low = Math.min(...valid.map(p => p.value)), high = Math.max(...valid.map(p => p.value));
   const range = high - low || Math.max(1, Math.abs(high) * .02), x = i => 55 + i / (valid.length - 1) * 620, y = v => 178 - (v - low) / range * 145;
   const path = valid.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-  return `<div class="chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${[low, low + range / 2, low + range].map(v => `<line x1="55" x2="680" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="48" y="${y(v) + 4}" text-anchor="end">${fmt(v, percent ? 1 : 0)}${percent ? '%' : ''}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="2.4" fill="none"/>${valid.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="2.7" fill="#77e2d0"><title>${esc(p.date)}：${fmt(p.value, 2)}${percent ? '%' : ''}</title></circle>`).join('')}<text x="55" y="209">${esc(valid[0].date)}</text><text x="680" y="209" text-anchor="end">${esc(valid.at(-1).date)}</text></svg></div>`;
+  return `<div class="chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${[low, low + range / 2, low + range].map(v => `<line x1="55" x2="680" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="48" y="${y(v) + 4}" text-anchor="end">${fmt(v, digits)}${percent ? '%' : ''}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="2.4" fill="none"/>${valid.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="2.7" fill="#77e2d0"><title>${esc(p.date)}：${fmt(p.value, Math.max(2, digits))}${percent ? '%' : ''}</title></circle>`).join('')}<text x="55" y="209">${esc(valid[0].date)}</text><text x="680" y="209" text-anchor="end">${esc(valid.at(-1).date)}</text></svg></div>`;
 }
 
 function metric(label, value, note, cls = '') {

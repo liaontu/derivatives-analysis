@@ -89,7 +89,7 @@ def decode(raw):
     return [{ALIASES.get(k, k): v for k, v in row.items()} for row in rows]
 
 
-def request_bytes(url):
+def request_bytes(url, transform=lambda raw: raw):
     request = urllib.request.Request(url, headers={
         "User-Agent": "DerivativeInsight/2.1 (daily public market research)",
         "Accept": "application/json,text/csv,text/html;q=0.9,*/*;q=0.5",
@@ -100,7 +100,7 @@ def request_bytes(url):
                 raw = response.read(40_000_001)
             if len(raw) > 40_000_000:
                 raise ValueError("Response exceeds size limit")
-            return raw
+            return transform(raw)
         except Exception:
             if attempt == 2:
                 raise
@@ -109,12 +109,11 @@ def request_bytes(url):
 
 def fetch(url):
     name = next((name for name, (_, source) in US_FEEDS.items() if source == url), None)
-    raw = request_bytes(cot_url(name) if name in COT_DATASETS else url)
     if name == "us-options":
-        return options_document(raw)
+        return request_bytes(url, options_document)
     if name == "us-futures":
-        return settlement_document(raw, request_bytes)
-    return decode(raw)
+        return request_bytes(url, lambda raw: settlement_document(raw, request_bytes))
+    return request_bytes(cot_url(name) if name in COT_DATASETS else url, decode)
 
 
 def normalize(name, raw):

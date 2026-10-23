@@ -60,7 +60,7 @@ export function createUSPages(ui) {
       <div class="metrics">${metric('Call 成交量', fmt(current?.callVolume), '口 · 所選分類')}${metric('Put 成交量', fmt(current?.putVolume), '口 · 所選分類')}${metric('成交量 P/C 比', ratio(current?.volumeRatio), 'Put 成交量 ÷ Call 成交量', 'teal')}${metric('未平倉 P/C 比', ratio(current?.oiRatio), 'Put 未平倉 ÷ Call 未平倉')}</div>
       ${table(['統計項目', 'Call', 'Put', '合計'], current ? [tr(['成交量（口）', fmt(current.callVolume), fmt(current.putVolume), fmt(current.totalVolume)]), tr(['未平倉（口）', fmt(current.callOi), fmt(current.putOi), fmt(current.totalOi)])] : [])}
       <p class="note">比值使用倍數，例如 0.94 倍＝94%。由原表口數計算；Call 為零時顯示缺值。未平倉依 Cboe 報表提供的範圍與時點，不能與台灣未平倉數量直接比較。</p>
-      <h2 class="trend-heading">所選分類・成交量 P/C 比趨勢</h2>${lineChart(points, 'Cboe 每日成交量 P/C 比（倍）')}
+      <h2 class="trend-heading">所選分類・成交量 P/C 比趨勢</h2>${lineChart(points, 'Cboe 每日成交量 P/C 比（倍）', false, 3)}
       <p class="note">每日統計歷史從本功能啟用後累積。CFTC 合併籌碼另列於下方，來源、頻率與單位各自標示。</p></section>
       <section class="panel"><div class="panel-head"><h2>各類選擇權每日比較</h2>${dateTag(data.date)}</div>${table(['分類／商品', 'Call 成交', 'Put 成交', '成交 P/C（倍）', 'Call 未平倉', 'Put 未平倉'], data.rows.map(r => tr([esc(optionNames[r.contract] || r.contract), fmt(r.callVolume), fmt(r.putVolume), fmt(r.volumeRatio, 3), fmt(r.callOi), fmt(r.putOi)])))}</section>${cot}`;
   }
