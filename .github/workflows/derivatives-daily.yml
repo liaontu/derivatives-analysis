@@ -1,8 +1,8 @@
 name: derivatives-daily
 on:
   schedule:
-    # Taipei 19:43 primary update; 22:43 retry late official reports.
-    - cron: '43 11,14 * * *'
+    # Taipei mornings after US close (both DST seasons), evenings after Taiwan close.
+    - cron: '43 0,3,11,14 * * *'
   workflow_dispatch:
 permissions:
   contents: write

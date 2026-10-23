@@ -17,6 +17,10 @@ import time
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+try:
+    from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
+except ImportError:  # Direct execution by the scheduled workflow.
+    from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
 
 TAIFEX = "https://openapi.taifex.com.tw/v1/"
 TPEX = "https://www.tpex.org.tw/openapi/v1/"
@@ -35,6 +39,7 @@ FEEDS = {
     "twse-volume-put": ("上市認售權證成交量", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=0999P&response=json"),
     "tpex-terms": ("上櫃權證條款", TPEX + "tpex_warrant_issue"),
     "tpex-warrants": ("上櫃權證行情", TPEX + "tpex_warrant_daily_quts"),
+    **US_FEEDS,
 }
 ALIASES = {
     "日期": "Date", "契約": "Contract", "商品名稱(契約名稱)": "ContractName",
@@ -84,10 +89,10 @@ def decode(raw):
     return [{ALIASES.get(k, k): v for k, v in row.items()} for row in rows]
 
 
-def fetch(url):
+def request_bytes(url):
     request = urllib.request.Request(url, headers={
-        "User-Agent": "DerivativeInsight/2.0 (daily public market research)",
-        "Accept": "application/json", "Referer": "https://www.twse.com.tw/",
+        "User-Agent": "DerivativeInsight/2.1 (daily public market research)",
+        "Accept": "application/json,text/csv,text/html;q=0.9,*/*;q=0.5",
     })
     for attempt in range(3):
         try:
@@ -95,14 +100,26 @@ def fetch(url):
                 raw = response.read(40_000_001)
             if len(raw) > 40_000_000:
                 raise ValueError("Response exceeds size limit")
-            return decode(raw)
+            return raw
         except Exception:
             if attempt == 2:
                 raise
             time.sleep(2 * (attempt + 1))
 
 
+def fetch(url):
+    name = next((name for name, (_, source) in US_FEEDS.items() if source == url), None)
+    raw = request_bytes(cot_url(name) if name in COT_DATASETS else url)
+    if name == "us-options":
+        return options_document(raw)
+    if name == "us-futures":
+        return settlement_document(raw, request_bytes)
+    return decode(raw)
+
+
 def normalize(name, raw):
+    if name in US_FEEDS:
+        return normalize_us(name, raw, number, iso_date)
     if name in ("twse-volume", "twse-volume-put"):
         if not isinstance(raw, dict) or raw.get("stat") != "OK":
             raise ValueError("Missing TWSE warrant trading report")
@@ -179,13 +196,13 @@ def validate(name, rows, today):
         raise ValueError("Missing records or source dates")
     latest = max(r["date"] for r in rows)
     age = (today - date.fromisoformat(latest)).days
-    if not 0 <= age <= 14:
+    if not 0 <= age <= (35 if name in COT_DATASETS else 14):
         raise ValueError(f"Source date out of range: {latest}")
     latest_rows = [r for r in rows if r["date"] == latest]
     field = "code" if name in ("twse-warrants", "twse-volume", "twse-volume-put", "tpex-warrants", "tpex-terms") else "contract"
     if name != "pcr" and any(not r.get(field) for r in latest_rows):
         raise ValueError(f"Missing {field}")
-    numeric = "netOi" if name.endswith("-institutional") else "oi" if name.endswith("-large") else "oiRatio" if name == "pcr" else "strike" if name == "tpex-terms" else "price" if name in ("futures", "options", "twse-warrants", "tpex-warrants") else "volume"
+    numeric = "oi" if name in COT_DATASETS else "totalVolume" if name == "us-options" else "price" if name == "us-futures" else "netOi" if name.endswith("-institutional") else "oi" if name.endswith("-large") else "oiRatio" if name == "pcr" else "strike" if name == "tpex-terms" else "price" if name in ("futures", "options", "twse-warrants", "tpex-warrants") else "volume"
     if not any(r.get(numeric) is not None for r in latest_rows):
         raise ValueError(f"Missing numeric field: {numeric}")
     return latest, latest_rows
@@ -217,11 +234,12 @@ def update_feed(name, old, raw, now, today):
         raise ValueError("Source regressed to an earlier date")
     # History is a union by date, not by fetch time. Re-runs replace that date.
     history = {}
-    if name.endswith("-institutional") or name == "pcr":
+    if name.endswith("-institutional") or name == "pcr" or name in US_FEEDS:
+        limit = 26 if name in COT_DATASETS else 60
         history = {entry["date"]: entry for entry in (old or {}).get("history", [])}
-        for day in sorted({r["date"] for r in rows})[-60:]:
+        for day in sorted({r["date"] for r in rows})[-limit:]:
             history[day] = {"date": day, "rows": [r for r in rows if r["date"] == day]}
-        history = [history[d] for d in sorted(history)[-60:]]
+        history = [history[d] for d in sorted(history)[-limit:]]
     return {"date": latest, "fetchedAt": now, "rows": current, "history": history or [], "status": "ok"}
 
 
@@ -267,12 +285,14 @@ def collect(output, fetcher=fetch, now=None):
             save(path, payload)
             feeds[name] = payload
             statuses.append({"id": name, "label": label, "url": url, "date": payload["date"],
-                             "status": payload["status"], "fetchedAt": payload["fetchedAt"], "count": len(payload["rows"]), "error": error})
+                             "status": payload["status"], "fetchedAt": payload["fetchedAt"], "count": len(payload["rows"]), "error": error,
+                             "region": "US" if name in US_FEEDS else "TW", "frequency": "weekly" if name in COT_DATASETS else "daily",
+                             "staleAfterDays": 14 if name in COT_DATASETS else 4})
             print(json.dumps({"feed": name, "date": payload["date"], "status": payload["status"], "count": len(payload["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
-    save(output / "manifest.json", {"schemaVersion": 2, "checkedAt": now, "sources": statuses,
-                                   "warrantCount": len(warrants), "schedule": "每日台北時間 19:43、22:43"})
+    save(output / "manifest.json", {"schemaVersion": 3, "checkedAt": now, "sources": statuses,
+                                   "warrantCount": len(warrants), "schedule": "每日台北時間 08:43、11:43、19:43、22:43"})
     return errors
 
 

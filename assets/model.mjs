@@ -3,6 +3,16 @@ export const fmt = (x, digits = 0) => finite(x) ? x.toLocaleString('zh-TW', { ma
 export const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const cpLabel = x => ({ C: '買權 Call', P: '賣權 Put' }[x] || '—');
 export const warrantCp = x => ({ C: '認購', P: '認售' }[x] || '其他');
+export function filterUSMarkets(rows, query = '') {
+  const q = query.trim().toLowerCase();
+  return rows.filter(r => !q || `${r.contract} ${r.name}`.toLowerCase().includes(q)).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+export function cotTrend(history, contract, category) {
+  return history.map(d => ({ date: d.date, value: d.rows.find(r => r.contract === contract)?.categories.find(r => r.category === category)?.net }));
+}
+export function isStaleSource(source, today = taipeiToday()) {
+  return !!source.date && daysUntil(source.date, today) < -(source.staleAfterDays ?? (source.frequency === 'weekly' ? 14 : 4));
+}
 export function taipeiToday(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
