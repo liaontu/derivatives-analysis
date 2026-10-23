@@ -1,9 +1,11 @@
-# 衍生視界
+# 衍生視界：免費期權籌碼與權證篩選
 
-公開網址：https://liaontu.github.io/derivatives-analysis/
+https://liaontu.github.io/derivatives-analysis/
 
-此儲存庫僅保存產生後的公開分析網站。台灣官方日資料由排程更新；美國市場提供官方行情入口及手動損益試算。非即時行情，排程可能延遲。
+台灣期貨、選擇權籌碼與上市櫃權證盤後行情；不抓現股、不提供營業分點明細。
 
-期貨與選擇權資料來源：臺灣期貨交易所；權證資料來源：證交所、櫃買中心。各商品資料日見網站。本站為整理與計算結果，非原始資料，僅供個人研究。
+每日台北時間 19:43、22:43 由公開儲存庫標準 Ubuntu runner 更新，僅使用 Python 標準函式庫及官方公開來源；無 API 金鑰、付費主機、付費行情、cache 或 artifacts。GitHub Pages 免費託管，排程可能延遲。
 
-券商分點為個人加密功能，每日台北時間 19:43 由公開儲存庫標準 Linux runner 更新，不使用付費 API、Actions cache 或 artifacts。需持有私人解鎖檔才能在瀏覽器查閱。追蹤清單見 config/branch-watchlist.json，最多 10 檔；最新目錄保留 60 個資料日，Git 歷史仍保留舊密文。各日只含買超與賣超前 15 名，非全部分點。
+資料源：臺灣期貨交易所、臺灣證券交易所、證券櫃檯買賣中心。本站為整理後資料，各項資料日與更新狀態在網站標示；來源失敗保留最後成功值。法人歷史自啟用後累積最近 60 個資料日。非即時行情，僅供研究。
+
+手動更新：Actions → derivatives-daily → Run workflow。本機更新：`python automation/derivatives/collect.py`。工作流程提交資料後明確呼叫 Pages build API，避免機器人提交不觸發發布。

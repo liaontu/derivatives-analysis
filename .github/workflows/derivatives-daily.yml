@@ -1,0 +1,44 @@
+name: derivatives-daily
+on:
+  schedule:
+    # Taipei 19:43 primary update; 22:43 retry late official reports.
+    - cron: '43 11,14 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: derivatives-daily
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch official derivatives data
+        id: collect
+        continue-on-error: true
+        run: python automation/derivatives/collect.py
+      - name: Commit data and source status
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/derivatives/
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: daily official derivatives update'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      # GITHUB_TOKEN commits do not implicitly start a Pages build.
+      - name: Rebuild GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/pages/builds"
+      - name: Report unavailable sources
+        if: steps.collect.outcome == 'failure'
+        run: exit 1
