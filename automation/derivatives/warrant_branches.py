@@ -1,0 +1,257 @@
+"""Bounded public warrant rankings. Never implies full branch coverage."""
+from __future__ import annotations
+import argparse
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
+from html.parser import HTMLParser
+import json
+from pathlib import Path
+import re
+import time
+from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlparse
+from urllib.request import Request, urlopen
+from urllib.robotparser import RobotFileParser
+
+try:
+    from .collect import read, save
+except ImportError:
+    from collect import read, save
+
+ORIGIN = 'https://fubon-ebrokerdj.fbs.com.tw'
+AGENT = 'DerivativesAnalysis-WarrantRankings/1.0'
+CODE = re.compile(r'\d{5}[0-9A-Z]')
+SCHEDULE = '每日台北時間 20:13；平台排程可能延遲'
+
+
+def source_url(code):
+    if not CODE.fullmatch(code):
+        raise ValueError('Invalid warrant code')
+    return f'{ORIGIN}/z/zc/zco/zco_{code}_1.djhtm'
+
+
+def fetch(url):
+    if not url.startswith(ORIGIN + '/'):
+        raise ValueError('Unexpected source host')
+    with urlopen(Request(url, headers={'User-Agent': AGENT}), timeout=15) as response:
+        if urlparse(response.url).hostname != urlparse(ORIGIN).hostname:
+            raise ValueError('Unexpected redirect')
+        blob = response.read(2_000_001)
+        if len(blob) > 2_000_000:
+            raise ValueError('Response too large')
+        return blob.decode(response.headers.get_content_charset() or 'cp950', errors='strict')
+
+
+class Table(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows, self.text, self.row, self.cell, self.skip = [], [], None, None, 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.skip += 1
+        if self.skip:
+            return
+        if tag == 'tr':
+            self.row = []
+        elif tag in ('td', 'th'):
+            self.cell = {'text': '', 'href': None}
+        elif tag == 'a' and self.cell is not None:
+            self.cell['href'] = dict(attrs).get('href')
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.text.append(data)
+            if self.cell is not None:
+                self.cell['text'] += data
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self.skip = max(0, self.skip - 1)
+        if self.skip:
+            return
+        if tag in ('td', 'th') and self.cell is not None:
+            if self.row is not None:
+                self.row.append(self.cell)
+            self.cell = None
+        elif tag == 'tr' and self.row is not None:
+            self.rows.append(self.row)
+            self.row = None
+
+
+def numeric(text):
+    try:
+        value = Decimal(text.strip().replace(',', '').removesuffix('%'))
+    except InvalidOperation:
+        raise ValueError('Missing or invalid quantity') from None
+    if not value.is_finite():
+        raise ValueError('Non-finite quantity')
+    return value
+
+
+def parse_page(html, code):
+    source_url(code)
+    parser = Table()
+    parser.feed(html)
+    plain = ' '.join(parser.text)
+    if f'({code})' not in plain or not all(t in plain for t in ('券商分點', '買超券商', '賣超券商')):
+        raise ValueError('Wrong warrant or changed source page')
+    if not re.search(r'單位[：:]\s*張', plain):
+        raise ValueError('Unknown source unit')
+    match = re.search(r'最後更新日[：:]\s*(\d{4}/\d{2}/\d{2})', plain)
+    if not match:
+        raise ValueError('Missing source date')
+    day = date.fromisoformat(match[1].replace('/', '-')).isoformat()
+    rows, counts = [], {'buy': 0, 'sell': 0}
+    for cells in parser.rows:
+        if not any('zco0.djhtm?' in (c['href'] or '') for c in cells):
+            continue
+        if len(cells) != 10:
+            raise ValueError('Changed ranking columns')
+        for offset, side in ((0, 'buy'), (5, 'sell')):
+            cell = cells[offset]
+            if not cell['href']:
+                if any(c['text'].strip() for c in cells[offset:offset + 5]):
+                    raise ValueError('Missing branch link')
+                continue
+            params = parse_qs(urlparse(cell['href']).query)
+            if params.get('a') != [code]:
+                raise ValueError('Mismatched warrant link')
+            branch = params.get('b', [''])[0]
+            if re.fullmatch(r'(?:[0-9a-fA-F]{4}){4}', branch):
+                branch = bytes.fromhex(branch).decode('utf-16-be')
+            name = cell['text'].strip()
+            if not re.fullmatch(r'[A-Za-z0-9]{4}', branch) or not name:
+                raise ValueError('Invalid branch identity')
+            buy, sell, magnitude, share = [numeric(c['text']) for c in cells[offset + 1:offset + 5]]
+            net = magnitude if side == 'buy' else -magnitude
+            difference = buy - sell - net
+            tolerance = Decimal(1) if all(v == v.to_integral_value() for v in (buy, sell, magnitude)) else Decimal('0.001')
+            if min(buy, sell, magnitude, share) < 0 or abs(difference) > tolerance:
+                raise ValueError('Inconsistent ranking quantities')
+            counts[side] += 1
+            rows.append({'branchCode': branch, 'branchName': name, 'side': side, 'rank': counts[side],
+                         'buy': float(buy), 'sell': float(sell), 'net': float(net), 'share': float(share),
+                         'displayRoundingDifference': float(difference)})
+    if not rows or max(counts.values()) > 15 or len({r['branchCode'] for r in rows}) != len(rows):
+        raise ValueError('Empty, duplicate or unexpected rankings')
+    for side in counts:
+        magnitudes = [abs(r['net']) for r in rows if r['side'] == side]
+        if magnitudes != sorted(magnitudes, reverse=True):
+            raise ValueError('Unexpected ranking order')
+    return {'date': day, 'rows': rows, 'completeBranchCoverage': False, 'missingBranchMeansZero': False}
+
+
+def select_warrants(catalog, config, today):
+    limit, watch = config['topCount'], config['watchlist']
+    if type(limit) is not int or not 0 <= limit <= 300 or not isinstance(watch, list) or len(watch) > 20 or len(set(watch)) != len(watch) or any(not isinstance(c, str) or not CODE.fullmatch(c) for c in watch):
+        raise ValueError('Invalid bounded warrant configuration')
+    by_code = {}
+    for r in catalog:
+        code = r.get('code', '')
+        if CODE.fullmatch(code) and r.get('market') in ('TWSE', 'TPEX') and r.get('cp') in ('C', 'P'):
+            if code in by_code:
+                raise ValueError('Duplicate warrant catalog code')
+            by_code[code] = r
+    eligible = []
+    for r in by_code.values():
+        day = date.fromisoformat(r['date'])
+        last = r.get('lastTrade') or r.get('expiry')
+        if 0 <= (today - day).days <= 4 and (not last or last >= today.isoformat()) and (r.get('volume') or 0) > 0:
+            eligible.append(r)
+    if not eligible:
+        raise ValueError('Warrant catalog unavailable or stale')
+    selected = sorted(eligible, key=lambda r: (-r['volume'], r['code']))[:limit]
+    codes = {r['code'] for r in selected}
+    issues = []
+    for code in watch:
+        r = by_code.get(code)
+        last = (r.get('lastTrade') or r.get('expiry')) if r else None
+        if not r or (last and last < today.isoformat()):
+            issues.append({'code': code, 'reason': '權證已到期、停止交易或不在官方權證清單'})
+        elif code not in codes:
+            selected.append(r)
+            codes.add(code)
+    return selected, issues
+
+
+def update_warrant(quote, old, html, now, today):
+    current = parse_page(html, quote['code'])
+    day = date.fromisoformat(current['date'])
+    if not 0 <= (today - day).days <= 14 or (old and old.get('date') and current['date'] < old['date']):
+        raise ValueError('Invalid or regressed source date')
+    buy = sum(Decimal(str(r['buy'])) for r in current['rows'])
+    sell = sum(Decimal(str(r['sell'])) for r in current['rows'])
+    volume = quote.get('volume') if quote['date'] == current['date'] else None
+    current.update({'buyTotal': float(buy), 'sellTotal': float(sell), 'quoteDate': quote['date'], 'quoteVolume': volume,
+                    'buyGap': float(Decimal(str(volume)) - buy) if volume is not None else None,
+                    'sellGap': float(Decimal(str(volume)) - sell) if volume is not None else None})
+    history = {d['date']: d for d in (old or {}).get('history', [])}
+    history[current['date']] = current
+    return {'code': quote['code'], 'date': current['date'], 'sourceUrl': source_url(quote['code']),
+            'unit': '張', 'completeBranchCoverage': False, 'missingBranchMeansZero': False,
+            'status': 'ok', 'fetchedAt': now, 'history': [history[d] for d in sorted(history, reverse=True)[:30]]}
+
+
+def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=1000):
+    now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
+    today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
+    started = time.monotonic()
+    index_path = output / 'warrant-branches.json'
+    old_index = read(index_path) or {'items': [], 'checkedAt': None}
+    errors = []
+    try:
+        selected, issues = select_warrants((read(output / 'warrants.json') or {})['rows'], config, today)
+        robots = RobotFileParser()
+        try:
+            robots.parse(fetcher(ORIGIN + '/robots.txt').splitlines())
+        except HTTPError as exc:
+            if exc.code != 404:
+                raise
+            robots.parse([])
+        interval = max(delay, robots.crawl_delay(AGENT) or 0)
+        if interval > 30:
+            raise ValueError('Source crawl delay exceeds job budget')
+    except Exception:
+        save(index_path, {**old_index, 'status': 'retained' if old_index['items'] else 'unavailable',
+                          'checkedAt': now, 'error': '來源政策或官方權證清單暫不可用；保留前次資料'})
+        return ['catalog_or_policy']
+    items = []
+    for quote in selected:
+        code = quote['code']
+        path = output / 'warrant-branches' / f'{code}.json'
+        old = read(path)
+        error = None
+        try:
+            if time.monotonic() - started >= budget_seconds:
+                raise ValueError('Daily time budget reached')
+            if not robots.can_fetch(AGENT, source_url(code)):
+                raise ValueError('Source disallows collection')
+            sleeper(interval)
+            payload = update_warrant(quote, old, fetcher(source_url(code)), now, today)
+        except Exception:
+            errors.append(code)
+            error = '來源暫不可用、日期異常或欄位改變'
+            payload = {**(old or {'code': code, 'date': None, 'history': [], 'fetchedAt': None,
+                                 'sourceUrl': source_url(code), 'completeBranchCoverage': False, 'missingBranchMeansZero': False}),
+                       'status': 'retained' if old and old.get('history') else 'unavailable'}
+        payload.update(checkedAt=now, error=error)
+        save(path, payload)
+        items.append({**{k: quote.get(k) for k in ('code', 'name', 'market', 'cp', 'underlying', 'underlyingName', 'volume')},
+                      'quoteDate': quote['date'], 'date': payload['date'], 'status': payload['status'], 'error': error,
+                      'fetchedAt': payload['fetchedAt'], 'fixed': code in config['watchlist'],
+                      'count': len(payload['history'][0]['rows']) if payload['history'] else 0})
+        print(json.dumps({'warrant': code, 'date': payload['date'], 'status': payload['status']}, ensure_ascii=False), flush=True)
+    save(index_path, {'schemaVersion': 1, 'checkedAt': now, 'status': 'partial' if errors else 'ok',
+                      'schedule': SCHEDULE, 'topCount': config['topCount'], 'watchlist': config['watchlist'],
+                      'issues': issues, 'items': items, 'errorCount': len(errors), 'error': None,
+                      'completeBranchCoverage': False, 'missingBranchMeansZero': False})
+    return errors
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output', type=Path, default=Path('data/derivatives'))
+    parser.add_argument('--config', type=Path, default=Path('automation/derivatives/warrant-branches.json'))
+    args = parser.parse_args()
+    raise SystemExit(1 if collect(args.output, read(args.config)) else 0)
