@@ -186,6 +186,8 @@ def normalize(name, raw):
         elif name.endswith("-fcm"):
             out.update(code=r.get("FCMCode"), name=r.get("FCMName"), contract=r.get("Contract"), volume=number(r.get("Volume")))
         elif name == "pcr":
+            if "PutCallOIRatio%" not in r:
+                raise ValueError("P/C source columns changed: " + ", ".join(str(k) for k in r))
             for field, source in {"putVolume": "PutVolume", "callVolume": "CallVolume", "volumeRatio": "PutCallVolumeRatio%",
                                   "putOi": "PutOI", "callOi": "CallOI", "oiRatio": "PutCallOIRatio%"}.items():
                 out[field] = number(r.get(source))
