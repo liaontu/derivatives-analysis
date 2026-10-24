@@ -10,6 +10,8 @@ https://liaontu.github.io/derivatives-analysis/
 
 權證價差異常觀察：每日依同日、同標的及相同基本履約條件配對，按行使比例換算收盤價。配對資料保留 252 個資料日，每期條款獨立保存；前 20 筆資料估算 Z 值，|Z|≥2 才列訊號。訊號後次一資料日作觀察基準，再觀察 5 個資料日的偏離收斂；屬收盤價差事件回測，沒有可成交套利、交易報酬或成本後損益的推定。資料不足、缺值與失敗另行標示。
 
+上市歷史補抓：官方最近一個月的歷史行情／條款與認購、認售成交量逐日核對後匯入。資料涵蓋、無報表日期與失敗原因見價差頁面及 data/derivatives/warrant-backfill.json；上櫃及分點排行未補抓。歷史條款依各日報表（發行人前一營業日申報）；來源可能修訂，未另驗證盤中條款異動。
+
 權證分點來源：富邦證券公開網站／嘉實資訊；買超與賣超各最多 15 名，非全部分點。每天台北 20:13 更新成交量前 300 檔＋固定清單（設定見 automation/derivatives/warrant-branches.json）；每檔最多累積 30 個資料日。未列入不代表零交易，不查現股。
 
 手動更新：Actions → derivatives-daily → Run workflow。本機更新：`python automation/derivatives/collect.py`。工作流程提交資料後明確呼叫 Pages build API，避免機器人提交不觸發發布。

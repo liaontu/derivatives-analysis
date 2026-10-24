@@ -198,4 +198,5 @@ def collect_spreads(output, warrants, feeds, now, today, read, save):
                       'status': payload['status']})
     save(output / 'warrant-spreads.json', {'schemaVersion': 1, 'rules': RULES, 'checkedAt': now,
                                          'status': 'partial' if any(i['status'] != 'ok' for i in items) else 'ok',
-                                         'error': None, 'items': items})
+                                         'error': None, 'items': items,
+                                         'backfill': read(output / 'warrant-backfill.json')})
