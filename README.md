@@ -16,4 +16,6 @@ https://liaontu.github.io/derivatives-analysis/
 
 資料品質與驗證：#quality 顯示來源品質、時間戳、發布內容校驗碼及最近檢查紀錄；治理規則隨免費日排程執行。收盤價差回測維持 Walk-forward Research，正式模型資格為否、Live OOS 為 0；歷史修訂可重算，不冒充即時績效。
 
+個股權證每日觀察表：#warrant-daily 按標的整合權證及標的同日期漲跌、成交量增減與量變率、同條件收盤價差、到期剩餘日曆天數及 8 項欄位完整度。讀取既有免費日更新資料，不新增網路來源或付費服務；支援排序、篩選、CSV 與逐檔趨勢連結。
+
 手動更新：Actions → derivatives-daily → Run workflow。本機更新：`python automation/derivatives/collect.py`。工作流程提交資料後明確呼叫 Pages build API，避免機器人提交不觸發發布。

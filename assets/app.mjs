@@ -2,6 +2,7 @@ import { finite, fmt, esc, cpLabel, warrantCp, warrantStyle, warrantSortLabels, 
 import { createUSPages } from './us.mjs';
 import { createWarrantBranches } from './branches.mjs';
 import { createDailyWatch } from './watch.mjs';
+import { createWarrantDaily } from './daily-table.mjs';
 import { createSpreadWatch } from './spreads.mjs';
 import { governancePage } from './governance.mjs';
 
@@ -16,6 +17,7 @@ const pages = {
   warrants: ['權證行情篩選', '按個股查看權證，依到期日與履約價排序，分辨歐式及美式履約方式。'],
   'warrant-branches': ['權證分點排行', '富邦買超／賣超分點排行，每日更新；非全部分點。'],
   'daily-watch': ['每日變動觀察', '權證價格、標的股價與分點排行，逐日對照變化。'],
+  'warrant-daily': ['個股權證每日觀察表', '同一標的的權證漲跌、量變、價差與資料完整度，一次對照。'],
   'warrant-spreads': ['權證價差異常觀察', '同條件權證的相對價差、歷史偏離與訊號事件回測。'],
   'us-futures': ['美國期貨', 'CFTC 每週持倉與 CFE 每日結算價，各自標示資料日期。'],
   'us-options': ['美國選擇權', 'Cboe 每日交易統計、P/C 比，以及 CFTC 每週期權合併籌碼。'],
@@ -37,6 +39,7 @@ const us = createUSPages({ load, state, select, choose, unique, table, tr, dateT
 
 const branches = createWarrantBranches({ load, table, tr, select, dateTag, signed, metric, empty });
 const dailyWatch = createDailyWatch({ load, table, tr, select, metric, dateTag, empty });
+const warrantDaily = createWarrantDaily({ load, table, tr, select, metric, empty });
 const spreadWatch = createSpreadWatch({ load, table, tr, select, metric, dateTag, empty });
 
 async function load(name) {
@@ -79,7 +82,7 @@ async function overview() {
   return `<div class="metrics">${metric('臺股期貨・近月結算', fmt(front?.price, 2), `${front?.month || '—'} · ${futures.date || '尚無資料'}`)}${metric('外資臺股期貨淨未平倉', signed(foreign?.netOi), `口 · ${inst.date || '尚無資料'}`)}${metric('臺指選擇權 P/C 未平倉比', finite(ratio?.oiRatio) ? fmt(ratio.oiRatio, 2) + '%' : '—', `${pcr.date || '尚無資料'} · 全契約`, 'teal')}${metric('上市櫃權證資料', fmt(manifest.warrantCount), '檔 · 可按個股查看，包含無成交權證')}</div>
   <div class="split"><section class="panel"><div class="panel-head"><div><span class="eyebrow">POSITIONING TREND</span><h2>臺指選擇權 P/C 比趨勢</h2></div>${dateTag(pcr.date)}</div>${lineChart(points, '臺指選擇權未平倉 Put/Call 比', true)}<p class="note">P/C 比＝賣權未平倉量 ÷ 買權未平倉量 × 100%。每個選擇權部位都有買賣雙方，比例本身不等於市場方向。</p></section><section class="panel"><span class="eyebrow">INSTITUTIONAL POSITION</span><h2>臺股期貨法人淨未平倉</h2><p class="muted">${esc(inst.date || '尚無資料')} · 單位：口</p>${inst.rows.filter(r => r.contract === '臺股期貨').map(r => `<div class="bar-row"><span>${esc(r.investor)}</span><div class="bar-track"><span style="width:${Math.min(100, Math.abs(r.netOi || 0) / Math.max(...inst.rows.filter(i => i.contract === '臺股期貨').map(i => Math.abs(i.netOi || 0)), 1) * 100)}%;background:${r.netOi < 0 ? '#6fd7ac' : '#ff8e99'}"></span></div><strong>${signed(r.netOi)}</strong></div>`).join('')}<p class="note">三類法人分別呈現。淨額是類別內部位互抵的結果，不能代表每一家機構的策略。</p><a href="#futures" class="text-link">查看法人與大額交易人 →</a></section></div>
   <div class="cards"><a href="#futures" class="link-card"><h3>⌁ 期貨籌碼</h3><p>法人多空、前五／十大部位、期貨商成交量</p></a><a href="#options" class="link-card"><h3>◇ 選擇權籌碼</h3><p>買賣權分計、履約價未平倉分布、P/C 比</p></a><a href="#warrants" class="link-card"><h3>▤ 權證篩選</h3><p>上市與上櫃權證、條件交叉篩選、CSV 匯出</p></a></div>
-  <section class="panel"><a class="text-link" href="#daily-watch">每日變動觀察 → 權證價格、標的股價與分點排行變化</a><p><a class="text-link" href="#warrant-spreads">權證價差異常觀察 → 同條件比較與訊號回測</a></p></section><div class="cards us-entry"><a href="#us-futures" class="link-card"><h3>US · 美國期貨</h3><p>CFTC 每週持倉 · CFE 每日結算價</p></a><a href="#us-options" class="link-card"><h3>US · 美國選擇權</h3><p>Cboe 每日 P/C 比 · 期權合併持倉</p></a></div><section class="panel"><div class="panel-head"><h2>重點期貨行情</h2>${dateTag(futures.date)}</div>${table(['契約', '月份', '結算價', '最後成交價', '成交量（口）', '未平倉（口）'], watch.map(r => tr([esc(contractName(r.contract)), esc(r.month), fmt(r.price, 2), fmt(r.last, 2), fmt(r.volume), fmt(r.oi)])))}<p class="note">一般交易時段；結算價與最後成交價分別標示。價格單位依各商品契約規格。</p></section>`;
+  <section class="panel"><p><a class="text-link" href="#warrant-daily">個股權證每日觀察表 → 漲跌、量變、同條件價差與完整度</a></p><a class="text-link" href="#daily-watch">每日變動觀察 → 權證價格、標的股價與分點排行變化</a><p><a class="text-link" href="#warrant-spreads">權證價差異常觀察 → 同條件比較與訊號回測</a></p></section><div class="cards us-entry"><a href="#us-futures" class="link-card"><h3>US · 美國期貨</h3><p>CFTC 每週持倉 · CFE 每日結算價</p></a><a href="#us-options" class="link-card"><h3>US · 美國選擇權</h3><p>Cboe 每日 P/C 比 · 期權合併持倉</p></a></div><section class="panel"><div class="panel-head"><h2>重點期貨行情</h2>${dateTag(futures.date)}</div>${table(['契約', '月份', '結算價', '最後成交價', '成交量（口）', '未平倉（口）'], watch.map(r => tr([esc(contractName(r.contract)), esc(r.month), fmt(r.price, 2), fmt(r.last, 2), fmt(r.volume), fmt(r.oi)])))}<p class="note">一般交易時段；結算價與最後成交價分別標示。價格單位依各商品契約規格。</p></section>`;
 }
 
 async function positioning(kind) {
@@ -157,7 +160,7 @@ async function warrants() {
     <p id="w-underlying-error" class="status-bad" role="status"></p><p class="note">「全部權證」會清除其他篩選，包含來源所列已到期或停止交易的權證；可再勾選下方排除條件。行情清單不受分點排行前 300 檔限制。</p>
   </section>
   <section class="panel"><div class="filters"><label class="search">搜尋代碼、名稱、標的或發行商關鍵字<input id="w-search" type="search" value="${esc(f.search || '')}" placeholder="例如 元大、認購權證代碼"></label>${select('w-market', '市場', ['', 'TWSE', 'TPEX'], f.market || '', v => ({ '': '上市＋上櫃', TWSE: '上市', TPEX: '上櫃' }[v]))}${select('w-cp', '權別', ['', 'C', 'P'], f.cp || '', v => v ? warrantCp(v) : '全部')}${select('w-style', '履約方式', ['', '歐式', '美式', 'unknown'], f.style || '', v => ({ '': '全部履約方式', unknown: '未提供／未識別' }[v] || v))}<label>最低成交量（張）<input id="w-volume" type="number" min="0" step="any" value="${esc(f.minVolume || '')}" placeholder="不限，含無成交"></label><label>至少剩餘天數<input id="w-days" type="number" min="0" step="1" value="${esc(f.minDays || '')}" placeholder="不限"></label><label>最高收盤價（元）<input id="w-price" type="number" min="0" step="0.01" value="${esc(f.maxPrice || '')}" placeholder="不限"></label>${select('w-sort', '排序', Object.keys(warrantSortLabels), f.sort, v => warrantSortLabels[v])}<label class="check"><input id="w-active" type="checkbox" ${f.active ? 'checked' : ''}> 排除已到期／已過最後交易日</label><button id="w-apply">套用篩選</button><button id="w-reset">重設篩選</button></div><p class="muted">${underlying ? `目前限定標的：${esc(selected?.label || underlying)}。` : ''}成交量預設不限，包含零成交及成交量缺值；「—」表示缺值。1 張＝1,000 單位。</p></section>
-  <section class="panel"><a class="text-link" href="#warrant-spreads${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">查看同標的權證價差異常與訊號回測 →</a></section><section class="panel source-list warrant-rules"><h2>歐式／美式履約規則</h2><p><strong>歐式</strong>：僅到期日可申請履約。<strong>美式</strong>：可在權證約定的履約期間內申請履約。這是申請履約時點的區別；市場買賣與最後交易日另依條款。</p><p class="note">到期日排序採官方的履約截止日（上市）或到期日（上櫃），與最後交易日分開顯示；實際申請時間、結算方式依發行條款及券商規定。<a href="https://www.twse.com.tw/zh/products/securities/warrant/educate/qa.html" target="_blank" rel="noopener noreferrer">證交所履約說明 ↗</a></p></section>
+  <section class="panel"><p><a class="text-link" href="#warrant-daily${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">查看個股權證每日觀察表 →</a></p><a class="text-link" href="#warrant-spreads${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">查看同標的權證價差異常與訊號回測 →</a></section><section class="panel source-list warrant-rules"><h2>歐式／美式履約規則</h2><p><strong>歐式</strong>：僅到期日可申請履約。<strong>美式</strong>：可在權證約定的履約期間內申請履約。這是申請履約時點的區別；市場買賣與最後交易日另依條款。</p><p class="note">到期日排序採官方的履約截止日（上市）或到期日（上櫃），與最後交易日分開顯示；實際申請時間、結算方式依發行條款及券商規定。<a href="https://www.twse.com.tw/zh/products/securities/warrant/educate/qa.html" target="_blank" rel="noopener noreferrer">證交所履約說明 ↗</a></p></section>
   <section class="panel"><div class="panel-head"><div><h2>${esc(title)}</h2><p class="muted">${fmt(rows.length)} 檔符合目前條件 · ${esc(warrantSortLabels[f.sort])} · ${f.active ? '排除已到期／停止交易' : '含來源所列已到期／停止交易'}</p><p class="muted">${manifest.sources.filter(s => ['twse-warrants', 'tpex-warrants'].includes(s.id)).map(s => `${s.id.startsWith('twse') ? '上市' : '上櫃'} ${esc(s.date || '無資料')}`).join(' · ')} · 剩餘天數以台北今日 ${taipeiToday()} 計算</p></div><button id="w-export" ${rows.length ? '' : 'disabled'}>匯出篩選結果 CSV</button></div>${table(['權證 / 代碼', '到期日 / 剩餘天數', '履約價', '履約方式', '市場 / 權別', '標的', '收盤價（元）', '成交量（張）', '成交金額（元）', '行使比例', '最後交易日', '行情資料日'], rows.slice(page * 50, (page + 1) * 50).map(r => tr([`<a class="text-link" href="#warrant-branches?code=${esc(r.code)}">${esc(r.name)}<small>${esc(r.code)} · 查看分點排行 →</small></a><small><a class="text-link" href="#daily-watch?code=${esc(r.code)}">每日價格與籌碼變化 →</a></small>${(daysUntil(r.expiry) !== null && daysUntil(r.expiry) < 0) || (daysUntil(r.lastTrade) !== null && daysUntil(r.lastTrade) < 0) ? '<small class="status-bad">已到期／停止交易</small>' : ''}`, `${esc(r.expiry || '—')}<small>${fmt(daysUntil(r.expiry))} 天</small>`, fmt(r.strike, 3), esc(warrantStyle(r.style)), `${r.market === 'TWSE' ? '上市' : '上櫃'} / ${warrantCp(r.cp)}`, `${esc(r.underlyingName || '—')}<small>${esc(r.underlying || '')}</small>`, fmt(r.price, 3), fmt(r.volume, 3), fmt(r.value), fmt(r.ratio, 6), esc(r.lastTrade || '—'), `${esc(r.date)}${r.termsDate && r.termsDate !== r.date ? `<small>條款 ${esc(r.termsDate)}</small>` : ''}`])))}<div class="pagination"><span>${fmt(rows.length)} / ${fmt(data.rows.length)} 檔 · 第 ${page + 1} / ${Math.max(1, Math.ceil(rows.length / 50))} 頁</span><div><button data-w-page="-1" ${page === 0 ? 'disabled' : ''}>上一頁</button><button data-w-page="1" ${(page + 1) * 50 >= rows.length ? 'disabled' : ''}>下一頁</button></div></div><p class="note">日期與履約價缺值一律排在最後。所有權證行情依官方來源清單呈現；分點排行仍僅限每日追蹤清單，每檔買超／賣超各最多 15 名，非全部分點。</p></section>`;
 }
 
@@ -170,6 +173,7 @@ async function sources() {
 function bind(kind) {
   const rerender = () => render();
   if (kind === 'daily-watch') { dailyWatch.bind(rerender); return; }
+  if (kind === 'warrant-daily') { warrantDaily.bind(rerender); return; }
   if (kind === 'warrant-spreads') { spreadWatch.bind(rerender); return; }
   if (kind === 'warrant-branches') { branches.bind(rerender); return; }
   if (kind.startsWith('us-')) { us.bind(rerender, kind === 'us-options'); return; }
@@ -224,14 +228,14 @@ async function render() {
   document.querySelectorAll('[data-nav]').forEach(a => { a.classList.toggle('active', a.dataset.nav === route); if (a.dataset.nav === route) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   try {
     if (!manifest) manifest = await load('manifest');
-    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-spreads'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
+    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-spreads'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
     const old = scope.filter(s => isStaleSource(s));
     const failed = scope.filter(s => s.status !== 'ok');
     $('#notice').classList.toggle('warning', !!(failed.length || old.length));
     $('#notice').innerHTML = failed.length || old.length ? `${failed.length ? `${failed.length} 個來源更新異常。` : ''}${old.length ? `${old.length} 個來源資料較舊（日資料超過 4 天／週報超過 14 天，可能含休市日）。` : ''} 已保留最近成功值。<a href="#sources">查看資料狀態</a>` : `官方資料已載入。日資料與 CFTC 週報依原始頻率呈現；各表分別標示資料日期。`;
     if (route === 'warrant-branches') { $('#notice').textContent = '富邦證券公開排行／嘉實資訊 · 非全部分點 · 每日台北時間 20:13 更新'; $('#notice').classList.remove('warning'); }
-    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-spreads'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
-    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)])) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-branches' ? await branches.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-spreads'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
+    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)])) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
     if (token !== generation) return;
     $('#content').innerHTML = html;
     bind(route);
