@@ -3,6 +3,23 @@ export const fmt = (x, digits = 0) => finite(x) ? x.toLocaleString('zh-TW', { ma
 export const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const cpLabel = x => ({ C: '買權 Call', P: '賣權 Put' }[x] || '—');
 export const warrantCp = x => ({ C: '認購', P: '認售' }[x] || '其他');
+export const warrantStyle = value => ({ E: '歐式', EUROPEAN: '歐式', '歐式': '歐式', A: '美式', AMERICAN: '美式', '美式': '美式' }[String(value || '').trim().toUpperCase()] || '未提供／未識別');
+export const warrantSortLabels = { volume: '成交量高至低', value: '成交金額高至低', expiry: '到期日近至遠', 'expiry-desc': '到期日遠至近', strike: '履約價低至高', 'strike-desc': '履約價高至低', price: '價格低至高' };
+export function warrantUnderlyings(rows) {
+  const choices = new Map();
+  for (const r of rows) {
+    if (!r.underlying) continue;
+    const code = String(r.underlying).trim();
+    if (!choices.has(code)) choices.set(code, { code, name: r.underlyingName || code });
+  }
+  return [...choices.values()].sort((a, b) => a.code.localeCompare(b.code)).map(r => ({ ...r, label: `${r.code} · ${r.name}` }));
+}
+export function resolveWarrantUnderlying(choices, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  const matches = choices.filter(r => [r.code, r.name, r.label].some(v => v.toLowerCase() === q));
+  return matches.length === 1 ? matches[0].code : null;
+}
 export function filterUSMarkets(rows, query = '') {
   const q = query.trim().toLowerCase();
   return rows.filter(r => !q || `${r.contract} ${r.name}`.toLowerCase().includes(q)).sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -25,19 +42,23 @@ export function filterWarrants(rows, filters, today = taipeiToday()) {
   return rows.filter(r => {
     const days = daysUntil(r.expiry, today), last = daysUntil(r.lastTrade, today);
     if (filters.active !== false && ((days !== null && days < 0) || (last !== null && last < 0))) return false;
+    if (filters.underlying && String(r.underlying) !== filters.underlying) return false;
     if (query && ![r.code, r.name, r.underlying, r.underlyingName].join(' ').toLowerCase().includes(query)) return false;
     if (filters.market && r.market !== filters.market || filters.cp && r.cp !== filters.cp) return false;
+    if (filters.style && warrantStyle(r.style) !== (filters.style === 'unknown' ? '未提供／未識別' : filters.style)) return false;
     if (Number(filters.minVolume) > 0 && (!finite(r.volume) || r.volume < Number(filters.minVolume))) return false;
     if (Number(filters.minDays) > 0 && (days === null || days < Number(filters.minDays))) return false;
     if (Number(filters.maxPrice) > 0 && (!finite(r.price) || r.price > Number(filters.maxPrice))) return false;
     return true;
   }).sort((a, b) => {
-    const key = filters.sort || 'volume', asc = ['expiry', 'price'].includes(key);
+    const requested = Object.hasOwn(warrantSortLabels, filters.sort) ? filters.sort : 'volume';
+    const key = requested.replace(/-desc$/, ''), asc = ['expiry', 'strike', 'price'].includes(requested);
     const av = key === 'expiry' ? daysUntil(a.expiry, today) : a[key];
     const bv = key === 'expiry' ? daysUntil(b.expiry, today) : b[key];
-    if (av === null || av === undefined) return bv === null || bv === undefined ? 0 : 1;
-    if (bv === null || bv === undefined) return -1;
-    return (av - bv) * (asc ? 1 : -1) || String(a.code).localeCompare(String(b.code));
+    const tie = String(a.code).localeCompare(String(b.code));
+    if (!finite(av)) return !finite(bv) ? tie : 1;
+    if (!finite(bv)) return -1;
+    return (av - bv) * (asc ? 1 : -1) || tie;
   });
 }
 export function oiDistribution(rows, contract, month, session = '一般') {
