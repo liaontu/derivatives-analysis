@@ -1,0 +1,201 @@
+"""Daily matched-term closing-spread research; no quotes or execution claims.
+
+Pair terms are captured when observed, never reconstructed from current terms.
+Only past observations enter a signal. Future dates are used only for outcomes.
+"""
+from collections import Counter, defaultdict
+from datetime import date, timedelta
+from hashlib import sha256
+from itertools import combinations
+import json
+import math
+import re
+from statistics import fmean, stdev, median
+
+VERSION = 'closing-spread-v1'
+WINDOW, THRESHOLD, HORIZON, RETAIN = 20, 2.0, 5, 252
+SAFE = re.compile(r'[A-Za-z0-9_-]{1,24}')
+RULES = {'version': VERSION, 'window': WINDOW, 'threshold': THRESHOLD, 'horizon': HORIZON,
+         'referenceLag': 1, 'retention': RETAIN, 'minEvaluatedSample': 30,
+         'executionCostsAvailable': False, 'settlementTermsVerified': False,
+         'description': '同條件收盤價差事件回測，非交易損益或套利保證'}
+
+
+def positive(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
+
+
+def style(value):
+    return {'E': '歐式', 'EUROPEAN': '歐式', '歐式': '歐式',
+            'A': '美式', 'AMERICAN': '美式', '美式': '美式'}.get(str(value or '').strip().upper())
+
+
+def valid_day(value):
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except (ValueError, TypeError):
+        return False
+
+
+def exclusion(row):
+    if not re.fullmatch(r'\d{4,6}[A-Z]?', str(row.get('underlying', ''))):
+        return '非國內股票或ETF代碼'
+    code = str(row.get('code', ''))
+    if not ((row.get('cp') == 'C' and re.fullmatch(r'\d{6}', code)) or
+            (row.get('cp') == 'P' and re.fullmatch(r'\d{5}[PUT]', code))):
+        return '非一般認購售權證'
+    if not style(row.get('style')) or not positive(row.get('strike')) or not positive(row.get('ratio')):
+        return '履約條件缺值'
+    day, expiry = row.get('date'), row.get('expiry')
+    if not valid_day(day) or not valid_day(expiry) or (row.get('lastTrade') and not valid_day(row['lastTrade'])):
+        return '日期缺值或異常'
+    if expiry <= day or (row.get('lastTrade') and row['lastTrade'] < day):
+        return '已到期或過最後交易日'
+    if row.get('termsDate') != day:
+        return '行情與條款日期不同'
+    if not positive(row.get('price')):
+        return '價格缺值或非正值'
+    if not positive(row.get('volume')):
+        return '無成交或成交量缺值'
+    return None
+
+
+def pair_spec(a, b):
+    a, b = sorted((a, b), key=lambda r: r['code'])
+    side = lambda r: {k: r.get(k) for k in ('code', 'name', 'market', 'ratio', 'lastTrade')}
+    spec = {'a': side(a), 'b': side(b), 'strike': a['strike'], 'expiry': a['expiry'],
+            'cp': a['cp'], 'style': style(a['style']), 'underlying': a['underlying']}
+    # Names are display-only, so spelling corrections do not reset a series.
+    identity = {**spec, 'a': {k: v for k, v in spec['a'].items() if k != 'name'},
+                'b': {k: v for k, v in spec['b'].items() if k != 'name'}}
+    key = sha256(json.dumps(identity, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
+    return {**spec, 'id': f"{a['code']}-{b['code']}-{key}"}, [a['date'], a['price'], b['price'], a['volume'], b['volume']]
+
+
+def spread(point, spec):
+    a, b = point[1] / spec['a']['ratio'], point[2] / spec['b']['ratio']
+    # Symmetric percentage difference. A/B orientation never follows the price.
+    return 200 * (a - b) / (a + b)
+
+
+def analyze(spec, calendar):
+    points = {p[0]: p for p in spec['points']}
+    rolling, observations = [], []
+    for day in calendar:
+        point = points.get(day)
+        value = spread(point, spec) if point else None
+        baseline = rolling[-WINDOW:]
+        mean = fmean(baseline) if len(baseline) == WINDOW else None
+        sd = stdev(baseline) if mean is not None else None
+        z = (value - mean) / sd if value is not None and sd is not None and sd > 1e-10 else None
+        status = '缺少同日有效配對' if point is None else '歷史不足' if mean is None else '歷史變異不足' if z is None else '異常待觀察' if abs(z) >= THRESHOLD else '未達門檻'
+        observations.append({'date': day, 'spread': value, 'mean': mean, 'z': z, 'priorCount': len(baseline), 'status': status})
+        if point is None:
+            rolling = []
+        else:
+            rolling.append(value)
+    events, available_after = [], 0
+    for i, obs in enumerate(observations):
+        if i < available_after or obs['z'] is None or abs(obs['z']) < THRESHOLD:
+            continue
+        entry, end = i + 1, i + 1 + HORIZON
+        event = {'signalDate': obs['date'], 'signalZ': obs['z'], 'baselineMean': obs['mean'],
+                 'referenceDate': calendar[entry] if entry < len(calendar) else None,
+                 'evaluationDate': calendar[end] if end < len(calendar) else None,
+                 'referenceDeviation': None, 'endDeviation': None, 'contraction': None}
+        # Keep pending/invalid cases in the denominator inventory, not the rate.
+        if entry < len(calendar) and observations[entry]['spread'] is None:
+            event['status'] = 'missing'
+        elif end >= len(calendar):
+            event['status'] = 'pending'
+        elif any(o['spread'] is None for o in observations[entry:end + 1]):
+            event['status'] = 'missing'
+        else:
+            before = abs(observations[entry]['spread'] - obs['mean'])
+            after = abs(observations[end]['spread'] - obs['mean'])
+            event.update(status='evaluated', referenceDeviation=before, endDeviation=after, contraction=before - after)
+        events.append(event)
+        available_after = end  # Per-pair windows do not overlap; no portfolio aggregation.
+    done = [e for e in events if e['status'] == 'evaluated']
+    smaller = sum(e['contraction'] > 1e-10 for e in done)
+    larger = sum(e['contraction'] < -1e-10 for e in done)
+    summary = {'signals': len(events), 'evaluated': len(done), 'pending': sum(e['status'] == 'pending' for e in events),
+               'missing': sum(e['status'] == 'missing' for e in events), 'converged': smaller, 'diverged': larger,
+               'unchanged': len(done) - smaller - larger, 'convergenceRate': 100 * smaller / len(done) if done else None,
+               'medianContraction': median(e['contraction'] for e in done) if done else None,
+               'sampleInsufficient': len(done) < RULES['minEvaluatedSample']}
+    return {'observations': observations, 'latest': observations[-1] if observations else None,
+            'backtest': {'events': events, 'summary': summary}}
+
+
+def successful(row, feeds):
+    names = ('twse-warrants', 'twse-volume' if row.get('cp') == 'C' else 'twse-volume-put') if row.get('market') == 'TWSE' else ('tpex-warrants', 'tpex-terms')
+    return all(feeds.get(n, {}).get('status') == 'ok' for n in names)
+
+
+def collect_spreads(output, warrants, feeds, now, today, read, save):
+    by_underlying = defaultdict(list)
+    for row in warrants:
+        code = row.get('underlying', '')
+        if isinstance(code, str) and SAFE.fullmatch(code):
+            by_underlying[code].append(row)
+    old_index = read(output / 'warrant-spreads.json') or {'items': []}
+    names = {i['code']: i['name'] for i in old_index['items']}
+    names.update({code: rows[0].get('underlyingName') or code for code, rows in by_underlying.items()})
+    cutoff = (today - timedelta(days=550)).isoformat()
+    items = []
+    for code, name in sorted(names.items()):
+        if not SAFE.fullmatch(code):
+            continue
+        path = output / 'warrant-spreads' / f'{code}.json'
+        old = read(path) or {'pairs': [], 'dates': [], 'eligibility': {}}
+        rows = by_underlying.get(code, [])
+        fresh = [r for r in rows if successful(r, feeds) and valid_day(r.get('date'))]
+        dates = sorted(set(old['dates']) | {r['date'] for r in fresh})
+        dates = [d for d in dates if d >= cutoff][-RETAIN:]
+        pairs = {p['id']: {k: v for k, v in p.items() if k not in ('observations', 'latest', 'backtest')} for p in old['pairs']}
+        # Re-running one source day replaces all that market's observations,
+        # including pairs now invalidated by a source correction or zero volume.
+        touched = {(r['market'], r.get('cp'), r['date']) for r in fresh}
+        for pair in pairs.values():
+            pair['points'] = [p for p in pair['points'] if p[0] in dates and
+                              not all((pair[side]['market'], pair['cp'], p[0]) in touched for side in ('a', 'b'))]
+        groups = defaultdict(list)
+        excluded = Counter()
+        eligible = 0
+        duplicates = Counter((r.get('code'), r['date']) for r in fresh)
+        for row in fresh:
+            reason = '同日重複代碼' if duplicates[(row.get('code'), row['date'])] > 1 else exclusion(row)
+            if reason:
+                excluded[reason] += 1
+                continue
+            eligible += 1
+            key = (row['date'], row['cp'], style(row['style']), row['strike'], row['expiry'])
+            groups[key].append(row)
+        for group in groups.values():
+            for a, b in combinations(sorted(group, key=lambda r: r['code']), 2):
+                spec, point = pair_spec(a, b)
+                existing = pairs.get(spec['id'], {'points': []})
+                points = {p[0]: p for p in existing['points']}
+                points[point[0]] = point
+                pairs[spec['id']] = {**spec, 'points': [points[d] for d in sorted(points) if d in dates]}
+        pairs = [p for p in pairs.values() if p['points']]
+        for pair in pairs:
+            pair.update(analyze(pair, dates))
+        pairs.sort(key=lambda p: p['id'])
+        latest = dates[-1] if dates else None
+        current = [p for p in pairs if p['latest'] and p['latest']['spread'] is not None]
+        blocked = len(rows) - len(fresh)
+        eligibility = {'total': len(rows), 'eligible': eligible, 'excluded': dict(excluded), 'sourceUnavailable': blocked}
+        if not fresh and old.get('eligibility'):
+            eligibility = {**old['eligibility'], 'sourceUnavailable': len(rows)}
+        payload = {'schemaVersion': 1, 'rules': RULES, 'underlying': code, 'name': name, 'dates': dates,
+                   'date': latest, 'status': 'partial' if blocked else 'ok', 'eligibility': eligibility, 'pairs': pairs}
+        if payload != old:
+            save(path, payload)
+        items.append({'code': code, 'name': name, 'date': latest, 'days': len(dates), 'pairs': len(current),
+                      'historyPairs': len(pairs), 'signals': sum(p['latest']['status'] == '異常待觀察' for p in current),
+                      'status': payload['status']})
+    save(output / 'warrant-spreads.json', {'schemaVersion': 1, 'rules': RULES, 'checkedAt': now,
+                                         'status': 'partial' if any(i['status'] != 'ok' for i in items) else 'ok',
+                                         'error': None, 'items': items})

@@ -20,9 +20,11 @@ from pathlib import Path
 try:
     from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
     from .warrant_history import archive
+    from .warrant_spreads import collect_spreads
 except ImportError:  # Direct execution by the scheduled workflow.
     from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
     from warrant_history import archive
+    from warrant_spreads import collect_spreads
 
 TAIFEX = "https://openapi.taifex.com.tw/v1/"
 TPEX = "https://www.tpex.org.tw/openapi/v1/"
@@ -308,6 +310,14 @@ def collect(output, fetcher=fetch, now=None):
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
     archive(output, warrants, feeds, now, today, read, save)
+    try:
+        collect_spreads(output, warrants, feeds, now, today, read, save)
+    except Exception as exc:
+        old_spreads = read(output / 'warrant-spreads.json') or {'items': []}
+        save(output / 'warrant-spreads.json', {**old_spreads, 'status': 'retained', 'checkedAt': now,
+                                              'error': '價差計算暫時失敗，保留上次結果'})
+        errors.append('warrant-spreads')
+        print(json.dumps({'feed': 'warrant-spreads', 'status': 'retained', 'error': type(exc).__name__}))
     save(output / "manifest.json", {"schemaVersion": 3, "checkedAt": now, "sources": statuses,
                                    "warrantCount": len(warrants), "schedule": "每日台北時間 08:43、11:43、19:43、22:43"})
     return errors
