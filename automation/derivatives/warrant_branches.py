@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import re
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
@@ -40,6 +40,18 @@ def fetch(url):
         if len(blob) > 2_000_000:
             raise ValueError('Response too large')
         return blob.decode(response.headers.get_content_charset() or 'cp950', errors='strict')
+
+
+def fetch_with_retry(url, fetcher, sleeper, interval):
+    for attempt in range(2):
+        try:
+            return fetcher(url)
+        except (URLError, TimeoutError) as exc:
+            if isinstance(exc, HTTPError) and exc.code not in (408, 500, 502, 503, 504):
+                raise
+            if attempt:
+                raise
+            sleeper(max(3, interval))
 
 
 class Table(HTMLParser):
@@ -228,8 +240,10 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             if not robots.can_fetch(AGENT, source_url(code)):
                 raise ValueError('Source disallows collection')
             sleeper(interval)
-            payload = update_warrant(quote, old, fetcher(source_url(code)), now, today)
-        except Exception:
+            payload = update_warrant(quote, old, fetch_with_retry(source_url(code), fetcher, sleeper, interval), now, today)
+        except Exception as exc:
+            print(json.dumps({'warrant': code, 'failureType': type(exc).__name__,
+                              'httpStatus': exc.code if isinstance(exc, HTTPError) else None}), flush=True)
             errors.append(code)
             error = '來源暫不可用、日期異常或欄位改變'
             payload = {**(old or {'code': code, 'date': None, 'history': [], 'fetchedAt': None,
