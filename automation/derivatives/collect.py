@@ -19,8 +19,10 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 try:
     from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
+    from .warrant_history import archive
 except ImportError:  # Direct execution by the scheduled workflow.
     from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
+    from warrant_history import archive
 
 TAIFEX = "https://openapi.taifex.com.tw/v1/"
 TPEX = "https://www.tpex.org.tw/openapi/v1/"
@@ -39,9 +41,16 @@ FEEDS = {
     "twse-volume-put": ("上市認售權證成交量", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=0999P&response=json"),
     "tpex-terms": ("上櫃權證條款", TPEX + "tpex_warrant_issue"),
     "tpex-warrants": ("上櫃權證行情", TPEX + "tpex_warrant_daily_quts"),
+    "tpex-underlyings": ("權證標的上櫃股票／ETF 收盤價", TPEX + "tpex_mainboard_daily_close_quotes"),
     **US_FEEDS,
 }
 ALIASES = {
+    "契約代號": "Contract", "商品名稱": "ContractCode", "身份別": "Item",
+    "最後成交價": "Last", "結算價": "SettlementPrice", "未沖銷契約數": "OpenInterest", "未沖銷契約量": "OpenInterest",
+    "合計成交量": "Volume", "成交量": "Volume", "最後最佳買價": "BestBid", "最後最佳賣價": "BestAsk",
+    "交易時段": "TradingSession", "履約價": "StrikePrice", "漲跌%": "%",
+    "多方交易口數": "TradingVolume(Long)", "空方交易口數": "TradingVolume(Short)", "多空交易口數淨額": "TradingVolume(Net)",
+    "多方未平倉口數": "OpenInterest(Long)", "空方未平倉口數": "OpenInterest(Short)", "多空未平倉口數淨額": "OpenInterest(Net)",
     "日期": "Date", "契約": "Contract", "商品名稱(契約名稱)": "ContractName",
     "買賣權": "CallPut", "到期月份(週別)": "SettlementMonth", "交易人類別": "TypeOfTraders",
     "前五大交易人買方數量": "Top5Buy", "前五大交易人賣方數量": "Top5Sell",
@@ -143,6 +152,7 @@ def normalize(name, raw):
             raise ValueError("TWSE warrant columns changed")
         day = iso_date(raw.get("date"))
         return [{"date": day, "code": str(r[0]).strip(), "name": r[1], "price": number(r[2]),
+                 "underlyingPrice": number(r[6]),
                  "underlying": str(r[4]).strip(), "underlyingName": r[5], "cp": cp(r[8]),
                  "style": r[9], "lastTrade": iso_date(r[12]), "expiry": iso_date(r[13]),
                  "ratio": number(r[14]), "strike": number(r[15]), "market": "TWSE"}
@@ -153,7 +163,7 @@ def normalize(name, raw):
     for r in raw:
         out = {"date": iso_date(r.get("Date"))}
         if name in ("futures", "options"):
-            out.update(contract=r.get("Contract"), month=r.get("ContractMonth(Week)"),
+            out.update(contract=r.get("Contract"), month=r.get("ContractMonth(Week)", r.get("SettlementMonth")),
                        session=r.get("TradingSession"), price=number(r.get("SettlementPrice")),
                        last=number(r.get("Last", r.get("Close"))), volume=number(r.get("Volume")),
                        oi=number(r.get("OpenInterest")), bid=number(r.get("BestBid")), ask=number(r.get("BestAsk")))
@@ -186,6 +196,10 @@ def normalize(name, raw):
             units = number(r.get("TradeVol.", r.get("TradeVol")))
             out.update(code=r.get("Code"), name=r.get("Name"), price=number(r.get("Close")),
                        volume=units / 1000 if units is not None else None, value=number(r.get("TradeValue")), market="TPEX")
+        elif name == "tpex-underlyings":
+            if not {'Date', 'SecuritiesCompanyCode', 'CompanyName', 'Close'} <= r.keys():
+                raise ValueError('Underlying quote columns changed')
+            out.update(code=r['SecuritiesCompanyCode'], name=r['CompanyName'], price=number(r['Close']))
         rows.append(out)
     return rows
 
@@ -198,10 +212,10 @@ def validate(name, rows, today):
     if not 0 <= age <= (35 if name in COT_DATASETS else 14):
         raise ValueError(f"Source date out of range: {latest}")
     latest_rows = [r for r in rows if r["date"] == latest]
-    field = "code" if name in ("twse-warrants", "twse-volume", "twse-volume-put", "tpex-warrants", "tpex-terms") else "contract"
+    field = "code" if name in ("twse-warrants", "twse-volume", "twse-volume-put", "tpex-warrants", "tpex-terms", "tpex-underlyings") else "contract"
     if name != "pcr" and any(not r.get(field) for r in latest_rows):
         raise ValueError(f"Missing {field}")
-    numeric = "oi" if name in COT_DATASETS else "totalVolume" if name == "us-options" else "price" if name == "us-futures" else "netOi" if name.endswith("-institutional") else "oi" if name.endswith("-large") else "oiRatio" if name == "pcr" else "strike" if name == "tpex-terms" else "price" if name in ("futures", "options", "twse-warrants", "tpex-warrants") else "volume"
+    numeric = "oi" if name in COT_DATASETS else "totalVolume" if name == "us-options" else "price" if name == "us-futures" else "netOi" if name.endswith("-institutional") else "oi" if name.endswith("-large") else "oiRatio" if name == "pcr" else "strike" if name == "tpex-terms" else "price" if name in ("futures", "options", "twse-warrants", "tpex-warrants", "tpex-underlyings") else "volume"
     if not any(r.get(numeric) is not None for r in latest_rows):
         raise ValueError(f"Missing numeric field: {numeric}")
     return latest, latest_rows
@@ -276,6 +290,9 @@ def collect(output, fetcher=fetch, now=None):
                 payload = {**(old or {"date": None, "rows": [], "history": [], "fetchedAt": None}), "status": "retained" if old and old.get("rows") else "unavailable"}
             payload["checkedAt"] = now
             payload["error"] = error
+            if name == 'tpex-underlyings':
+                underlyings = {r.get('underlying') for n in ('tpex-terms', 'twse-warrants') for r in feeds.get(n, {}).get('rows', [])}
+                payload['rows'] = [r for r in payload['rows'] if r['code'] in underlyings]
             if name == "options-fcm":
                 names = {r["code"]: r["name"] for r in feeds.get("futures-fcm", {}).get("rows", [])}
                 for r in payload["rows"]:
@@ -290,6 +307,7 @@ def collect(output, fetcher=fetch, now=None):
             print(json.dumps({"feed": name, "date": payload["date"], "status": payload["status"], "count": len(payload["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
+    archive(output, warrants, feeds, now, today, read, save)
     save(output / "manifest.json", {"schemaVersion": 3, "checkedAt": now, "sources": statuses,
                                    "warrantCount": len(warrants), "schedule": "每日台北時間 08:43、11:43、19:43、22:43"})
     return errors

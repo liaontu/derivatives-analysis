@@ -6,3 +6,5 @@
 .branch-tables{grid-template-columns:repeat(2,minmax(0,1fr))}.branch-tables td,.branch-tables th{padding-inline:7px}@media(max-width:1250px){.branch-tables{grid-template-columns:1fr}}
 
 #wb-list summary{cursor:pointer;color:var(--teal);padding:12px 0}#wb-list[open] summary{margin-bottom:12px}
+
+.watch-controls{margin-top:18px}.watch-pins{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.watch-pins .selected{color:var(--teal);border-color:var(--teal)}.watch-charts{grid-template-columns:repeat(2,minmax(0,1fr))}.watch-charts .panel{margin-bottom:0}.watch-charts{margin-bottom:22px}#dw-message:empty{display:none}@media(max-width:900px){.watch-charts{grid-template-columns:1fr}}@media(max-width:680px){.watch-controls label{min-width:100%}.watch-controls button{width:100%}.watch-pins .tag{white-space:normal;max-width:100%}}

@@ -2,7 +2,7 @@
 
 https://liaontu.github.io/derivatives-analysis/
 
-台灣期權、權證；美國 CFTC 週報、Cboe 選擇權統計與 CFE 期貨結算價；不抓現股。另有富邦權證分點排行（非全部分點）。
+台灣期權、權證；美國 CFTC 週報、Cboe 選擇權統計與 CFE 期貨結算價。每日觀察保留權證及其標的收盤價最近 60 個資料日；不抓現股分點。另有富邦權證分點排行（非全部分點）。
 
 每日台北時間 08:43、11:43、19:43、22:43 由公開儲存庫標準 Ubuntu runner 更新，使用 Python 標準函式庫；無 API 金鑰、付費主機、付費行情、cache 或 artifacts。GitHub Pages 免費託管，排程可能延遲。
 
