@@ -14,4 +14,6 @@ https://liaontu.github.io/derivatives-analysis/
 
 權證分點來源：富邦證券公開網站／嘉實資訊；買超與賣超各最多 15 名，非全部分點。每天台北 20:13 更新成交量前 300 檔＋固定清單（設定見 automation/derivatives/warrant-branches.json）；每檔最多累積 30 個資料日。未列入不代表零交易，不查現股。
 
+資料品質與驗證：#quality 顯示來源品質、時間戳、發布內容校驗碼及最近檢查紀錄；治理規則隨免費日排程執行。收盤價差回測維持 Walk-forward Research，正式模型資格為否、Live OOS 為 0；歷史修訂可重算，不冒充即時績效。
+
 手動更新：Actions → derivatives-daily → Run workflow。本機更新：`python automation/derivatives/collect.py`。工作流程提交資料後明確呼叫 Pages build API，避免機器人提交不觸發發布。

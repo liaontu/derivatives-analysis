@@ -11,12 +11,18 @@ import json
 import math
 import re
 from statistics import fmean, stdev, median
+try:
+    from .governance import VERSION as GOVERNANCE_VERSION, digest, sample_maturity
+except ImportError:
+    from governance import VERSION as GOVERNANCE_VERSION, digest, sample_maturity
 
 VERSION = 'closing-spread-v1'
 WINDOW, THRESHOLD, HORIZON, RETAIN = 20, 2.0, 5, 252
 SAFE = re.compile(r'[A-Za-z0-9_-]{1,24}')
 RULES = {'version': VERSION, 'window': WINDOW, 'threshold': THRESHOLD, 'horizon': HORIZON,
-         'referenceLag': 1, 'retention': RETAIN, 'minEvaluatedSample': 30,
+         'referenceLag': 1, 'retention': RETAIN, 'minEvaluatedSample': 50,
+         'governanceVersion': GOVERNANCE_VERSION, 'backtestType': 'Walk-forward Research',
+         'formalModelEligible': False, 'calendarBasis': 'source-observation-days',
          'executionCostsAvailable': False, 'settlementTermsVerified': False,
          'description': '同條件收盤價差事件回測，非交易損益或套利保證'}
 
@@ -79,6 +85,14 @@ def spread(point, spec):
 
 
 def analyze(spec, calendar):
+    if calendar != sorted(set(calendar)) or any(not valid_day(d) for d in calendar):
+        raise ValueError('Research calendar must be unique and chronological')
+    point_dates = [p[0] for p in spec['points']]
+    if point_dates != sorted(set(point_dates)) or not set(point_dates) <= set(calendar):
+        raise ValueError('Research points must be unique, ordered and on the source calendar')
+    if not all(positive(spec[side]['ratio']) for side in ('a', 'b')) or any(
+            len(p) != 5 or not all(positive(v) for v in p[1:]) for p in spec['points']):
+        raise ValueError('Research points require positive finite prices, volumes and ratios')
     points = {p[0]: p for p in spec['points']}
     rolling, observations = [], []
     for day in calendar:
@@ -89,7 +103,8 @@ def analyze(spec, calendar):
         sd = stdev(baseline) if mean is not None else None
         z = (value - mean) / sd if value is not None and sd is not None and sd > 1e-10 else None
         status = '缺少同日有效配對' if point is None else '歷史不足' if mean is None else '歷史變異不足' if z is None else '異常待觀察' if abs(z) >= THRESHOLD else '未達門檻'
-        observations.append({'date': day, 'spread': value, 'mean': mean, 'z': z, 'priorCount': len(baseline), 'status': status})
+        observations.append({'date': day, 'spread': value, 'mean': mean, 'z': z, 'priorCount': len(baseline), 'status': status,
+                             'trainingEndDate': calendar[len(observations) - 1] if mean is not None else None})
         if point is None:
             rolling = []
         else:
@@ -100,6 +115,11 @@ def analyze(spec, calendar):
             continue
         entry, end = i + 1, i + 1 + HORIZON
         event = {'signalDate': obs['date'], 'signalZ': obs['z'], 'baselineMean': obs['mean'],
+                 'id': digest([spec['id'], obs['date'], HORIZON, VERSION, RULES['backtestType']])[:24],
+                 'trainingStartDate': calendar[i - WINDOW], 'trainingEndDate': calendar[i - 1],
+                 'inputSha256': digest([spec['id'], [points[d] for d in calendar[i - WINDOW:i + 1]]]),
+                 'modelVersion': VERSION, 'horizon': HORIZON, 'backtestType': RULES['backtestType'],
+                 'formalModelEligible': False,
                  'referenceDate': calendar[entry] if entry < len(calendar) else None,
                  'evaluationDate': calendar[end] if end < len(calendar) else None,
                  'referenceDeviation': None, 'endDeviation': None, 'contraction': None}
@@ -124,8 +144,23 @@ def analyze(spec, calendar):
                'unchanged': len(done) - smaller - larger, 'convergenceRate': 100 * smaller / len(done) if done else None,
                'medianContraction': median(e['contraction'] for e in done) if done else None,
                'sampleInsufficient': len(done) < RULES['minEvaluatedSample']}
+    # Enforced invariants, not a claim of trading profitability or point-in-time availability.
+    if len({e['id'] for e in events}) != len(events) or any(
+            e['trainingEndDate'] >= e['signalDate'] or
+            (e['referenceDate'] and e['referenceDate'] <= e['signalDate']) or
+            (e['status'] == 'evaluated' and not (e['referenceDate'] < e['evaluationDate'] <= calendar[-1]))
+            for e in events):
+        raise ValueError('Research event chronology or identity failed')
+    maturity = sample_maturity(len(done))
+    audit = {'version': GOVERNANCE_VERSION, 'status': 'passed', 'backtestType': RULES['backtestType'],
+             'checks': ['unique-ordered-dates', 'positive-inputs', 'past-only-baseline', 'event-chronology', 'evaluated-only-denominator'],
+             'evaluated': len(done), 'maturity': maturity, 'formalModelEligible': False, 'liveOosSamples': 0,
+             'calendarBasis': RULES['calendarBasis'],
+             'limitations': ['事後歷史重算，來源修訂可能改變結果；非當時留存的即時預測',
+                             '依已收錄資料日評估，未完整驗證交易日曆及當時可得時間',
+                             '同步報價、完整結算條款及交易／避險成本未驗證']}
     return {'observations': observations, 'latest': observations[-1] if observations else None,
-            'backtest': {'events': events, 'summary': summary}}
+            'backtest': {'events': events, 'summary': summary}, 'audit': audit}
 
 
 def successful(row, feeds):
@@ -143,7 +178,8 @@ def collect_spreads(output, warrants, feeds, now, today, read, save):
     names = {i['code']: i['name'] for i in old_index['items']}
     names.update({code: rows[0].get('underlyingName') or code for code, rows in by_underlying.items()})
     cutoff = (today - timedelta(days=550)).isoformat()
-    items = []
+    items, pending = [], []
+    audit_totals = Counter()
     for code, name in sorted(names.items()):
         if not SAFE.fullmatch(code):
             continue
@@ -153,6 +189,8 @@ def collect_spreads(output, warrants, feeds, now, today, read, save):
         fresh = [r for r in rows if successful(r, feeds) and valid_day(r.get('date'))]
         dates = sorted(set(old['dates']) | {r['date'] for r in fresh})
         dates = [d for d in dates if d >= cutoff][-RETAIN:]
+        if any(d > today.isoformat() for d in dates):
+            raise ValueError('Research calendar contains a future source date')
         pairs = {p['id']: {k: v for k, v in p.items() if k not in ('observations', 'latest', 'backtest')} for p in old['pairs']}
         # Re-running one source day replaces all that market's observations,
         # including pairs now invalidated by a source correction or zero volume.
@@ -182,6 +220,10 @@ def collect_spreads(output, warrants, feeds, now, today, read, save):
         pairs = [p for p in pairs.values() if p['points']]
         for pair in pairs:
             pair.update(analyze(pair, dates))
+            audit_totals['pairsChecked'] += 1
+            audit_totals['evaluated'] += pair['backtest']['summary']['evaluated']
+            audit_totals['pending'] += pair['backtest']['summary']['pending']
+            audit_totals['missing'] += pair['backtest']['summary']['missing']
         pairs.sort(key=lambda p: p['id'])
         latest = dates[-1] if dates else None
         current = [p for p in pairs if p['latest'] and p['latest']['spread'] is not None]
@@ -192,11 +234,16 @@ def collect_spreads(output, warrants, feeds, now, today, read, save):
         payload = {'schemaVersion': 1, 'rules': RULES, 'underlying': code, 'name': name, 'dates': dates,
                    'date': latest, 'status': 'partial' if blocked else 'ok', 'eligibility': eligibility, 'pairs': pairs}
         if payload != old:
-            save(path, payload)
+            pending.append((path, payload))
         items.append({'code': code, 'name': name, 'date': latest, 'days': len(dates), 'pairs': len(current),
                       'historyPairs': len(pairs), 'signals': sum(p['latest']['status'] == '異常待觀察' for p in current),
                       'status': payload['status']})
+    # Audit every underlying before replacing any derived files.
+    for path, payload in pending:
+        save(path, payload)
     save(output / 'warrant-spreads.json', {'schemaVersion': 1, 'rules': RULES, 'checkedAt': now,
                                          'status': 'partial' if any(i['status'] != 'ok' for i in items) else 'ok',
                                          'error': None, 'items': items,
+                                         'audit': {'version': GOVERNANCE_VERSION, 'status': 'passed', **audit_totals,
+                                                   'formalModelEligible': False, 'liveOosSamples': 0},
                                          'backfill': read(output / 'warrant-backfill.json')})

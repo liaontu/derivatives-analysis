@@ -3,6 +3,7 @@ import { createUSPages } from './us.mjs';
 import { createWarrantBranches } from './branches.mjs';
 import { createDailyWatch } from './watch.mjs';
 import { createSpreadWatch } from './spreads.mjs';
+import { governancePage } from './governance.mjs';
 
 const $ = selector => document.querySelector(selector);
 const cache = new Map();
@@ -19,6 +20,7 @@ const pages = {
   'us-futures': ['美國期貨', 'CFTC 每週持倉與 CFE 每日結算價，各自標示資料日期。'],
   'us-options': ['美國選擇權', 'Cboe 每日交易統計、P/C 比，以及 CFTC 每週期權合併籌碼。'],
   sources: ['資料與更新', '每項數據的來源、資料日期與更新狀態，都可以追溯。'],
+  quality: ['資料品質與驗證', '核對來源、追蹤修訂，分清研究回測與正式績效。'],
 };
 const commonNames = { TX: '臺股期貨', TXF: '臺股期貨', MTX: '小型臺指', MXF: '小型臺指', TMF: '微型臺指', TXO: '臺指選擇權', TE: '電子期貨', TEF: '電子期貨', TF: '金融期貨', TFF: '金融期貨', TFO: '金融選擇權', TEO: '電子選擇權' };
 const contractName = c => commonNames[c] ? `${c} · ${commonNames[c]}` : c;
@@ -160,7 +162,7 @@ async function warrants() {
 }
 
 async function sources() {
-  return `<section class="panel source-list"><span class="eyebrow">FREE DAILY UPDATES</span><h2>每天自動更新，開啟網站就能查</h2><p>台北時間每天 08:43、11:43、19:43、22:43 檢查並發布。上午接收美國盤後資料，晚上接收台灣盤後資料。CFTC 籌碼為每週公布，日排程不會把週報變成日資料。休市日保留官方最近資料；排程可能延遲。上方按鈕只重載最近發布的資料，不會觸發額外抓取。</p><p>官方資料無需帳號或金鑰。網站使用免費 GitHub Pages 與公開儲存庫標準執行器，不使用付費行情、付費伺服器或自訂網域。</p><a href="https://github.com/liaontu/derivatives-analysis/actions/workflows/derivatives-daily.yml" target="_blank" rel="noopener noreferrer">查看每日更新執行紀錄 ↗</a><div class="coverage">涵蓋台灣期貨與選擇權官方每日行情、三大法人、大額交易人、各期貨商成交量，以及上市櫃權證；美國加入 CFTC 金融／商品期貨與期權合併週報、Cboe 每日選擇權統計、CFE 每日結算價。未提供 CME 全商品行情或美股完整選擇權鏈，每日觀察另包含權證標的股票／ETF 收盤價及指數；不抓現股分點。另提供富邦權證分點排行，非全部分點。</div></section>
+  return `<section class="panel"><a class="text-link" href="#quality">資料品質與驗證 → 來源校驗碼、品質警示及回測使用資格</a></section><section class="panel source-list"><span class="eyebrow">FREE DAILY UPDATES</span><h2>每天自動更新，開啟網站就能查</h2><p>台北時間每天 08:43、11:43、19:43、22:43 檢查並發布。上午接收美國盤後資料，晚上接收台灣盤後資料。CFTC 籌碼為每週公布，日排程不會把週報變成日資料。休市日保留官方最近資料；排程可能延遲。上方按鈕只重載最近發布的資料，不會觸發額外抓取。</p><p>官方資料無需帳號或金鑰。網站使用免費 GitHub Pages 與公開儲存庫標準執行器，不使用付費行情、付費伺服器或自訂網域。</p><a href="https://github.com/liaontu/derivatives-analysis/actions/workflows/derivatives-daily.yml" target="_blank" rel="noopener noreferrer">查看每日更新執行紀錄 ↗</a><div class="coverage">涵蓋台灣期貨與選擇權官方每日行情、三大法人、大額交易人、各期貨商成交量，以及上市櫃權證；美國加入 CFTC 金融／商品期貨與期權合併週報、Cboe 每日選擇權統計、CFE 每日結算價。未提供 CME 全商品行情或美股完整選擇權鏈，每日觀察另包含權證標的股票／ETF 收盤價及指數；不抓現股分點。另提供富邦權證分點排行，非全部分點。</div></section>
   ${await branches.summary()}<section class="panel"><div class="panel-head"><h2>各來源狀態</h2><span class="muted">最近檢查 ${esc(new Date(manifest.checkedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }))}（台北）</span></div>${table(['來源', '原始頻率', '資料日', '筆數', '狀態'], manifest.sources.map(s => tr([`<a class="text-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.label)} ↗</a>${s.error ? '<small>來源暫時異常，等待下一次排程重試</small>' : ''}`, s.frequency === 'weekly' ? '每週 · 日排程檢查' : '每日盤後', esc(s.date || '—'), fmt(s.count), `<span class="${s.status === 'ok' ? 'status-ok' : 'status-bad'}">${{ ok: '取得成功', retained: '更新失敗・保留舊值', unavailable: '暫無資料' }[s.status] || esc(s.status)}</span>`])))}<p class="note">資料日期取自來源；檢查時間不會代替資料日期。來源失敗會保留最後成功資料並在網站與工作流程標示。日資料超過 4 天、CFTC 週報基準日超過 14 天會顯示提醒，連假或官方延後發布也可能觸發。</p></section>
   <section class="panel source-list"><h2>資料口徑與使用說明</h2><p>期貨、選擇權來源：<a href="https://openapi.taifex.com.tw/" target="_blank" rel="noopener noreferrer">臺灣期貨交易所</a>。權證來源：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener noreferrer">臺灣證券交易所</a>、<a href="https://www.tpex.org.tw/openapi/" target="_blank" rel="noopener noreferrer">證券櫃檯買賣中心</a>。美國來源：<a href="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm" target="_blank" rel="noopener noreferrer">CFTC COT</a>、<a href="https://www.cboe.com/markets/us/options/market-statistics/daily" target="_blank" rel="noopener noreferrer">Cboe 每日統計</a>、<a href="https://www.cboe.com/markets/us/futures/market-statistics/settlement/futures/daily" target="_blank" rel="noopener noreferrer">CFE 結算價</a>。本站為資料整理與計算結果。</p><p>法人歷史從本站啟用後累積最近 60 個資料日，P/C 比另含官方本次提供的歷史。一般交易時段的未平倉不與夜盤加總；前十大、前五大與特定法人數字也不可相加。</p><p>期貨商交易量反映交易通路的活躍度，無法據此推定多空方向。選擇權買權、賣權均有買賣雙方；本站不把賣權買方淨部位標成多單。</p><p>CFTC 通常美東週五 15:30 公布截至週二的部位，假期可能延後。金融 TFF 與商品 Disaggregated 分類不同；期權合併採期貨等值口數，不是選擇權單獨持倉。Cboe P/C 比以倍數呈現，台灣 P/C 比以百分比呈現；各自保留口徑。</p><p>行情與籌碼均非即時。權證可能無成交或提前停止交易，篩選結果不構成交易建議。</p></section>`;
 }
@@ -229,7 +231,7 @@ async function render() {
     $('#notice').innerHTML = failed.length || old.length ? `${failed.length ? `${failed.length} 個來源更新異常。` : ''}${old.length ? `${old.length} 個來源資料較舊（日資料超過 4 天／週報超過 14 天，可能含休市日）。` : ''} 已保留最近成功值。<a href="#sources">查看資料狀態</a>` : `官方資料已載入。日資料與 CFTC 週報依原始頻率呈現；各表分別標示資料日期。`;
     if (route === 'warrant-branches') { $('#notice').textContent = '富邦證券公開排行／嘉實資訊 · 非全部分點 · 每日台北時間 20:13 更新'; $('#notice').classList.remove('warning'); }
     $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-spreads'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
-    const html = route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-branches' ? await branches.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)])) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-branches' ? await branches.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
     if (token !== generation) return;
     $('#content').innerHTML = html;
     bind(route);

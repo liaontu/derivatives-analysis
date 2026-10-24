@@ -21,10 +21,12 @@ try:
     from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
     from .warrant_history import archive
     from .warrant_spreads import collect_spreads
+    from .governance import provenance, collect_quality
 except ImportError:  # Direct execution by the scheduled workflow.
     from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
     from warrant_history import archive
     from warrant_spreads import collect_spreads
+    from governance import provenance, collect_quality
 
 TAIFEX = "https://openapi.taifex.com.tw/v1/"
 TPEX = "https://www.tpex.org.tw/openapi/v1/"
@@ -296,20 +298,23 @@ def collect(output, fetcher=fetch, now=None):
                 payload = {**(old or {"date": None, "rows": [], "history": [], "fetchedAt": None}), "status": "retained" if old and old.get("rows") else "unavailable"}
             payload["checkedAt"] = now
             payload["error"] = error
-            if name == 'tpex-underlyings':
+            if name == 'tpex-underlyings' and not error:
                 underlyings = {r.get('underlying') for n in ('tpex-terms', 'twse-warrants') for r in feeds.get(n, {}).get('rows', [])}
                 payload['rows'] = [r for r in payload['rows'] if r['code'] in underlyings]
-            if name == "options-fcm":
+            if name == "options-fcm" and not error:
                 names = {r["code"]: r["name"] for r in feeds.get("futures-fcm", {}).get("rows", [])}
                 for r in payload["rows"]:
                     if not r.get("name") or "\ufffd" in r["name"]:
                         r["name"] = names.get(r["code"], r["code"])
+            if not error:
+                payload['provenance'] = provenance(payload, old, url)
             save(path, payload)
             feeds[name] = payload
             statuses.append({"id": name, "label": label, "url": url, "date": payload["date"],
                              "status": payload["status"], "fetchedAt": payload["fetchedAt"], "count": len(payload["rows"]), "error": error,
                              "region": "US" if name in US_FEEDS else "TW", "frequency": "weekly" if name in COT_DATASETS else "daily",
                              "staleAfterDays": 14 if name in COT_DATASETS else 4})
+            statuses[-1]['provenance'] = payload.get('provenance')
             print(json.dumps({"feed": name, "date": payload["date"], "status": payload["status"], "count": len(payload["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
@@ -322,8 +327,10 @@ def collect(output, fetcher=fetch, now=None):
                                               'error': '價差計算暫時失敗，保留上次結果'})
         errors.append('warrant-spreads')
         print(json.dumps({'feed': 'warrant-spreads', 'status': 'retained', 'error': type(exc).__name__}))
-    save(output / "manifest.json", {"schemaVersion": 3, "checkedAt": now, "sources": statuses,
-                                   "warrantCount": len(warrants), "schedule": "每日台北時間 08:43、11:43、19:43、22:43"})
+    manifest = {"schemaVersion": 4, "checkedAt": now, "sources": statuses,
+                "warrantCount": len(warrants), "schedule": "每日台北時間 08:43、11:43、19:43、22:43"}
+    collect_quality(output, manifest, read, save, today)
+    save(output / "manifest.json", manifest)
     return errors
 
 
