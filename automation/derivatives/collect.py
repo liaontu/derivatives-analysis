@@ -59,6 +59,8 @@ ALIASES = {
     "前十大交易人買方數量": "Top10Buy", "前十大交易人賣方數量": "Top10Sell",
     "全市場未沖銷部位數": "OIOfMarket",
     "期貨商代號": "FCMCode", "期貨商名稱": "FCMName", "商品": "Contract", "交易量": "Volume",
+    "賣權成交量": "PutVolume", "買權成交量": "CallVolume", "買賣權成交量比率%": "PutCallVolumeRatio%",
+    "賣權未平倉量": "PutOI", "買權未平倉量": "CallOI", "買賣權未平倉量比率%": "PutCallOIRatio%",
 }
 
 
