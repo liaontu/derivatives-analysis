@@ -1,3 +1,5 @@
+import {taiwanTradingAge} from './trading-calendar.mjs';
+export {taiwanTradingAge, taiwanFreshnessMessage, setTradingCalendar} from './trading-calendar.mjs';
 export const finite = x => typeof x === 'number' && Number.isFinite(x);
 export const fmt = (x, digits = 0) => finite(x) ? x.toLocaleString('zh-TW', { maximumFractionDigits: digits }) : '—';
 export const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,6 +30,10 @@ export function cotTrend(history, contract, category) {
   return history.map(d => ({ date: d.date, value: d.rows.find(r => r.contract === contract)?.categories.find(r => r.category === category)?.net }));
 }
 export function isStaleSource(source, today = taipeiToday()) {
+  if (source.region === 'TW' && source.frequency !== 'weekly') {
+    const age = taiwanTradingAge(source.date, today);
+    return age !== null && (age < 0 || age > (source.staleAfterTradingDays ?? 4));
+  }
   return !!source.date && daysUntil(source.date, today) < -(source.staleAfterDays ?? (source.frequency === 'weekly' ? 14 : 4));
 }
 export function taipeiToday(now = new Date()) {

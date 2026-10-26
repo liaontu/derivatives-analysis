@@ -3,6 +3,10 @@ from collections import Counter
 from datetime import date
 from hashlib import sha256
 import json
+try:
+    from .trading_calendar import default_calendar, CalendarUnavailable
+except ImportError:
+    from trading_calendar import default_calendar, CalendarUnavailable
 
 VERSION = 'research-governance-v1'
 RECEIPT_LIMIT = 4000
@@ -29,17 +33,20 @@ def provenance(payload, old, url):
                               previous != checksum else None}
 
 
-def source_quality(source, today):
+def source_quality(source, today, calendar=None):
     issues = []
     status = source.get('status')
     if status != 'ok':
         issues.append({'type': 'Delayed update' if status == 'retained' else 'Missing',
                        'severity': 'High', 'message': '更新失敗，保留上次成功值' if status == 'retained' else '來源無可用資料'})
     try:
-        age = (today - date.fromisoformat(source['date'])).days
-        if age < 0 or age > source.get('staleAfterDays', 4):
+        trading = source.get('region') == 'TW' and source.get('frequency') != 'weekly'
+        age = (calendar or default_calendar()).age(source['date'], today) if trading else (today - date.fromisoformat(source['date'])).days
+        if age < 0 or age > source.get('staleAfterTradingDays' if trading else 'staleAfterDays', 4):
             issues.append({'type': 'Time mismatch', 'severity': 'Medium',
-                           'message': '資料日期超出新鮮度提醒範圍；可能包含休市或延後發布'})
+                           'message': '資料日期超出交易日新鮮度提醒範圍' if trading else '資料日期超出日曆天新鮮度提醒範圍；可能包含休市或延後發布'})
+    except CalendarUnavailable:
+        issues.append({'type': 'Calendar unavailable', 'severity': 'High', 'message': '交易日曆未驗證或年份未涵蓋，無法判斷新鮮度'})
     except (KeyError, TypeError, ValueError):
         issues.append({'type': 'Missing', 'severity': 'High', 'message': '缺少有效來源日期'})
     if not (source.get('provenance') or {}).get('sha256'):
@@ -53,7 +60,7 @@ def receipt_state(source, quality):
             quality['level'], sorted(i['type'] for i in quality['issues'])]
 
 
-def collect_quality(output, manifest, read, save, today, now=None):
+def collect_quality(output, manifest, read, save, today, now=None, calendar=None):
     """Receipts record each change of a source's published state; an unchanged rerun adds nothing."""
     now = now or manifest.get('updatedAt') or manifest.get('checkedAt')
     previous = read(output / 'source-audit.json') or {'receipts': []}
@@ -61,7 +68,7 @@ def collect_quality(output, manifest, read, save, today, now=None):
                 for r in previous['receipts']]
     sources = []
     for source in manifest['sources']:
-        quality = source_quality(source, today)
+        quality = source_quality(source, today, calendar)
         sources.append({**source, 'quality': quality})
         state = receipt_state(source, quality)
         latest = max((r for r in receipts if r['source'] == source['id']), key=lambda r: (r['observedAt'] or '', r['id']), default=None)

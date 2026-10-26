@@ -16,8 +16,10 @@ from urllib.robotparser import RobotFileParser
 
 try:
     from .collect import read, save, stamp, WRITTEN
+    from .trading_calendar import default_calendar, calendar_for_run, fetch_json, CalendarUnavailable
 except ImportError:
     from collect import read, save, stamp, WRITTEN
+    from trading_calendar import default_calendar, calendar_for_run, fetch_json, CalendarUnavailable
 
 ORIGIN = 'https://fubon-ebrokerdj.fbs.com.tw'
 AGENT = 'DerivativesAnalysis-WarrantRankings/1.0'
@@ -156,13 +158,16 @@ def parse_page(html, code):
 
 
 class CatalogUnavailable(ValueError):
-    def __init__(self, latest, stale):
+    def __init__(self, latest, age):
         super().__init__('Warrant catalog unavailable or stale')
         self.latest = latest
-        self.stale = stale
+        self.age = age
+        self.stale = age is not None and age > 4
 
 
-def select_warrants(catalog, config, today):
+def select_warrants(catalog, config, today, calendar=None):
+    calendar = calendar or default_calendar()
+    calendar.is_open(today)  # A missing year must never fall back to weekdays.
     limit, watch = config['topCount'], config['watchlist']
     if type(limit) is not int or not 0 <= limit <= 300 or not isinstance(watch, list) or len(watch) > 20 or len(set(watch)) != len(watch) or any(not isinstance(c, str) or not CODE.fullmatch(c) for c in watch):
         raise ValueError('Invalid bounded warrant configuration')
@@ -177,11 +182,11 @@ def select_warrants(catalog, config, today):
     for r in by_code.values():
         day = date.fromisoformat(r['date'])
         last = r.get('lastTrade') or r.get('expiry')
-        if 0 <= (today - day).days <= 4 and (not last or last >= today.isoformat()) and (r.get('volume') or 0) > 0:
+        if calendar.fresh(day, today) and (not last or last >= today.isoformat()) and (r.get('volume') or 0) > 0:
             eligible.append(r)
     if not eligible:
         latest = max((r['date'] for r in by_code.values()), default=None)
-        raise CatalogUnavailable(latest, bool(latest and (today-date.fromisoformat(latest)).days > 4))
+        raise CatalogUnavailable(latest, calendar.age(latest, today) if latest else None)
     selected = sorted(eligible, key=lambda r: (-r['volume'], r['code']))[:limit]
     codes = {r['code'] for r in selected}
     issues = []
@@ -190,16 +195,18 @@ def select_warrants(catalog, config, today):
         last = (r.get('lastTrade') or r.get('expiry')) if r else None
         if not r or (last and last < today.isoformat()):
             issues.append({'code': code, 'reason': '權證已到期、停止交易或不在官方權證清單'})
+        elif not calendar.fresh(r.get('date'), today):
+            issues.append({'code': code, 'reason': '固定清單資料超過四個交易日、日期無效或日曆未驗證'})
         elif code not in codes:
             selected.append(r)
             codes.add(code)
     return selected, issues
 
 
-def update_warrant(quote, old, html, now, today):
+def update_warrant(quote, old, html, now, today, calendar=None):
     current = parse_page(html, quote['code'])
     day = date.fromisoformat(current['date'])
-    if not 0 <= (today - day).days <= 14 or (old and old.get('date') and current['date'] < old['date']):
+    if not (calendar or default_calendar()).fresh(day, today) or (old and old.get('date') and current['date'] < old['date']):
         raise ValueError('Invalid or regressed source date')
     buy = sum(Decimal(str(r['buy'])) for r in current['rows'])
     sell = sum(Decimal(str(r['sell'])) for r in current['rows'])
@@ -218,13 +225,14 @@ def update_warrant(quote, old, html, now, today):
     return payload
 
 
-def continuation_plan(catalog, config, today, prior, now):
-    current, issues = select_warrants(catalog, config, today)
+def continuation_plan(catalog, config, today, prior, now, calendar=None):
+    calendar = calendar or default_calendar()
+    current, issues = select_warrants(catalog, config, today, calendar)
     by_code = {q['code']: q for q in catalog if CODE.fullmatch(q.get('code', '')) and q.get('market') in ('TWSE', 'TPEX') and q.get('cp') in ('C', 'P')}
     pending = []
     for code in prior.get('remaining', []):
         q = by_code.get(code)
-        if q and 0 <= (today-date.fromisoformat(q['date'])).days <= 4 and (q.get('lastTrade') or q.get('expiry') or '9999') >= today.isoformat():
+        if q and calendar.fresh(q.get('date'), today) and (q.get('lastTrade') or q.get('expiry') or '9999') >= today.isoformat():
             pending.append(code)
     # Carry-over uses at most half the normal quota; today's hot list still gets a turn.
     selected = [q for q in current if q['code'] in config['watchlist']]
@@ -237,19 +245,20 @@ def continuation_plan(catalog, config, today, prior, now):
     return selected, issues, pending if capacity else []
 
 
-def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=900, clock=time.monotonic):
+def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=900, clock=time.monotonic, calendar_fetcher=None):
     now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     now = datetime.fromisoformat(now).astimezone(timezone.utc).isoformat(timespec='seconds')
     today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
     started = clock()
     WRITTEN.clear()
+    calendar, calendar_status = calendar_for_run(output, today.year, save, calendar_fetcher)
     index_path = output / 'warrant-branches.json'
     old_index = read(index_path) or {'items': []}
     errors = []
     try:
         catalog = (read(output / 'warrants.json') or {})['rows']
         prior = old_index.get('progress') or {}
-        selected, issues, pending = continuation_plan(catalog, config, today, prior, now)
+        selected, issues, pending = continuation_plan(catalog, config, today, prior, now, calendar)
         robots = RobotFileParser()
         try:
             robots.parse(fetcher(ORIGIN + '/robots.txt').splitlines())
@@ -261,13 +270,15 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
         if interval > 30:
             raise ValueError('Source crawl delay exceeds job budget')
     except Exception as exc:
-        gate = ({'reason': 'catalog_stale' if exc.stale else 'catalog_unavailable', 'catalogDate': exc.latest, 'maxAgeDays': 4}
-                if isinstance(exc, CatalogUnavailable) else {'reason': 'catalog_or_policy_unavailable'})
-        message = (f"官方權證清單資料日 {exc.latest} 已超過 4 個日曆日；保留舊資料與續跑進度，等待新行情"
+        gate = ({'reason': 'catalog_stale' if exc.stale else 'catalog_unavailable', 'catalogDate': exc.latest, 'maxAgeTradingDays': 4}
+                if isinstance(exc, CatalogUnavailable) else {'reason': 'calendar_unavailable' if isinstance(exc, CalendarUnavailable) else 'catalog_or_policy_unavailable'})
+        message = (f"官方權證清單資料日 {exc.latest} 已超過 4 個交易日；保留舊資料與續跑進度，等待新行情"
                    if isinstance(exc, CatalogUnavailable) and exc.stale else '來源政策或官方權證清單暫不可用；保留前次資料')
+        if isinstance(exc, CalendarUnavailable):
+            message = '交易日曆未驗證或年份未涵蓋；保留舊資料與續跑進度，暫停抓取'
         print(json.dumps({'collectionGate': gate}, ensure_ascii=False), flush=True)
         index = {**{k: v for k, v in old_index.items() if k not in ('updatedAt', 'checkedAt')},
-                 'status': 'retained' if old_index['items'] else 'unavailable', 'error': message, 'collectionGate': gate}
+                 'status': 'retained' if old_index['items'] else 'unavailable', 'error': message, 'collectionGate': gate, 'calendarStatus': calendar_status}
         save(index_path, stamp(index, old_index, now))
         return ['catalog_or_policy']
     basis = hashlib.sha256(json.dumps(selected, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -297,7 +308,7 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
                     deferred.append(code)
                     raise TimeoutError('Collection paused for a bounded continuation')
                 sleeper(interval)
-                payload = update_warrant(quote, old, fetch_with_retry(source_url(code), fetcher, sleeper, interval), now, today)
+                payload = update_warrant(quote, old, fetch_with_retry(source_url(code), fetcher, sleeper, interval), now, today, calendar)
                 completed.add(code)
                 completed_for[code] = version
                 failures.pop(code, None)
@@ -330,7 +341,7 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
     if len(remaining) > cap:
         issues.append({'reason': '待續跑清單超過容量；保留最早未完成項目', 'overflow': len(remaining)-cap})
         remaining = remaining[:cap]
-    index = {'schemaVersion': 2, 'status': 'partial' if remaining else 'ok',
+    index = {'schemaVersion': 3, 'status': 'partial' if remaining else 'ok', 'calendarStatus': calendar_status, 'maxAgeTradingDays': 4,
              'schedule': SCHEDULE, 'topCount': config['topCount'], 'watchlist': config['watchlist'],
              'issues': issues, 'items': sorted(items, key=lambda item: item['code']), 'errorCount': len(remaining), 'error': None,
              'completeBranchCoverage': False, 'missingBranchMeansZero': False}
@@ -349,4 +360,4 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=Path('data/derivatives'))
     parser.add_argument('--config', type=Path, default=Path('automation/derivatives/warrant-branches.json'))
     args = parser.parse_args()
-    raise SystemExit(1 if collect(args.output, read(args.config)) else 0)
+    raise SystemExit(1 if collect(args.output, read(args.config), calendar_fetcher=fetch_json) else 0)

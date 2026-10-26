@@ -1,4 +1,4 @@
-import { esc, fmt, finite, resolveWarrantUnderlying, warrantCp, daysUntil, toCSV } from './model.mjs';
+import { taiwanFreshnessMessage, esc, fmt, finite, resolveWarrantUnderlying, warrantCp, daysUntil, toCSV } from './model.mjs';
 import { trendChart } from './watch.mjs';
 import { pairAuditPanel } from './governance.mjs';
 
@@ -72,7 +72,8 @@ export function createSpreadWatch({ load, table, tr, select, metric, dateTag, em
     const signalCount = current.filter(p => p.latest.status === '異常待觀察').length;
     const ready = current.filter(p => finite(p.latest?.z)).length;
     const status = index.status === 'retained' || data.status !== 'ok' ? `<div class="notice warning">${esc(index.error || '部分行情來源更新異常；保留上次成功結果。')} 請核對資料日期。</div>` : '';
-    const stale = daysUntil(data.date) < -4 ? '<div class="notice warning">資料距今超過 4 天，可能包含休市日；這些結果不代表今日可交易訊號。</div>' : '';
+    const freshness = taiwanFreshnessMessage(data.date);
+    const stale = freshness ? `<div class="notice warning">${esc(freshness)}；這些結果不代表今日可交易訊號。</div>` : '';
     const metrics = `<div class="metrics">${metric('最新資料日可比較', fmt(current.length), `組 · ${data.date || '尚無資料'}`)}${metric('已累積資料日', fmt(data.dates.length), '至少 21 個完整配對日才有 Z 值')}${metric('可計算 Z 值', fmt(ready), '組 · 需要前 20 日有效價差')}${metric('達異常門檻', ready ? fmt(signalCount) : '—', ready ? '組 · |Z| ≥ 2，非交易建議' : '資料或變異不足，尚未判定異常')}</div>`;
     const list = `<section class="panel"><div class="panel-head"><div><h2>${esc(code)} · ${esc(data.name)} 的配對觀察</h2><p class="muted">${state.historical ? '含曾收錄的歷史配對／條款版本' : '最新資料日有有效收盤資料的配對'} · ${fmt(pairs.length)} 組</p></div><button id="sp-export-list" ${pairs.length ? '' : 'disabled'}>匯出配對 CSV</button></div>${pairs.length ? table(['配對 A / B', '共同履約條件', '換算後 A / B 價格', '相對價差', 'Z 值 / 狀態', '前期有效日數'], pairs.slice(state.page * 25, (state.page + 1) * 25).map(p => {
       const point = p.points.find(r => r[0] === data.date);

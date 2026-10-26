@@ -17,6 +17,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 try:
+    from .trading_calendar import calendar_for_run, fetch_json, default_calendar
     from .publication import WRITTEN
     from .warrant_catalog import publish_catalog
     from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
@@ -27,6 +28,7 @@ try:
     from .warrant_lab_reports import collect_reports
     from .governance import provenance, collect_quality
 except ImportError:  # Direct execution by the scheduled workflow.
+    from trading_calendar import calendar_for_run, fetch_json, default_calendar
     from publication import WRITTEN
     from warrant_catalog import publish_catalog
     from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
@@ -221,11 +223,11 @@ def normalize(name, raw):
     return rows
 
 
-def validate(name, rows, today):
+def validate(name, rows, today, calendar=None):
     if not rows or any(not r.get("date") for r in rows):
         raise ValueError("Missing records or source dates")
     latest = max(r["date"] for r in rows)
-    age = (today - date.fromisoformat(latest)).days
+    age = (today - date.fromisoformat(latest)).days if name in US_FEEDS else (calendar or default_calendar()).age(latest, today)
     if not 0 <= age <= (35 if name in COT_DATASETS else 14):
         raise ValueError(f"Source date out of range: {latest}")
     latest_rows = [r for r in rows if r["date"] == latest]
@@ -296,9 +298,9 @@ def stamp(payload, previous, now):
     return {**payload, "updatedAt": now if WRITTEN or payload != unchanged else previous.get("updatedAt") or previous.get("checkedAt") or now}
 
 
-def update_feed(name, old, raw, now, today):
+def update_feed(name, old, raw, now, today, calendar=None):
     rows = normalize(name, raw)
-    latest, current = validate(name, rows, today)
+    latest, current = validate(name, rows, today, calendar)
     if old and old.get("date") and latest < old["date"]:
         raise ValueError("Source regressed to an earlier date")
     # History is a union by date, not by fetch time. Re-runs replace that date.
@@ -327,11 +329,12 @@ def combine_warrants(feeds):
     return result
 
 
-def collect(output, fetcher=fetch, now=None):
+def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
     now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
     today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
     output.mkdir(parents=True, exist_ok=True)
     WRITTEN.clear()
+    calendar, calendar_status = calendar_for_run(output, today.year, save, calendar_fetcher)
     old_manifest = read(output / "manifest.json") or {}
     feeds, statuses, errors = {}, [], []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
@@ -341,7 +344,7 @@ def collect(output, fetcher=fetch, now=None):
             old = read(path)
             error = None
             try:
-                payload = update_feed(name, old, tasks[name].result(), now, today)
+                payload = update_feed(name, old, tasks[name].result(), now, today, calendar)
                 if name == 'tpex-underlyings':
                     underlyings = {r.get('underlying') for n in ('tpex-terms', 'twse-warrants') for r in feeds.get(n, {}).get('rows', [])}
                     payload['rows'] = [r for r in payload['rows'] if r['code'] in underlyings]
@@ -371,6 +374,8 @@ def collect(output, fetcher=fetch, now=None):
                              "status": status, "fetchedAt": stored.get("fetchedAt"), "count": len(stored["rows"]), "error": error,
                              "region": "US" if name in US_FEEDS else "TW", "frequency": "weekly" if name in COT_DATASETS else "daily",
                              "staleAfterDays": 14 if name in COT_DATASETS else 4, "provenance": stored.get("provenance")})
+            if name not in US_FEEDS:
+                statuses[-1].update(staleAfterTradingDays=4, freshnessBasis='TW trading days')
             print(json.dumps({"feed": name, "date": stored["date"], "status": status, "count": len(stored["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
@@ -385,7 +390,7 @@ def collect(output, fetcher=fetch, now=None):
         print(json.dumps({'feed': 'warrant-spreads', 'status': 'retained', 'error': type(exc).__name__}))
     focus_report = None
     try:
-        focus_report = collect_focus(output, warrants, feeds, now, today, read, save)
+        focus_report = collect_focus(output, warrants, feeds, now, today, read, save, calendar=calendar)
     except Exception as exc:
         old_focus = read(output / 'warrant-focus.json') or {'items': []}
         save(output / 'warrant-focus.json', retained(old_focus, '觀察清單計算失敗，保留上次結果與原日期'))
@@ -405,9 +410,9 @@ def collect(output, fetcher=fetch, now=None):
         save(output / 'warrant-lab-reports.json', retained(old_reports, '觀察報告產生失敗，保留既有報告與原時間。'))
         errors.append('warrant-lab-reports')
         print(json.dumps({'feed': 'warrant-lab-reports', 'status': 'retained', 'error': type(exc).__name__}))
-    manifest = {"schemaVersion": 5, "sources": statuses, "warrantCount": len(warrants),
+    manifest = {"schemaVersion": 6, "sources": statuses, "warrantCount": len(warrants), "calendarStatus": calendar_status,
                 "schedule": "預定台北 08:23、11:23，以及 18:23 至 23:23 每小時檢查；可能延遲或漏跑，內容未變動不重新發布"}
-    collect_quality(output, manifest, read, save, today, now)
+    collect_quality(output, manifest, read, save, today, now, calendar=calendar)
     # An unchanged rerun leaves every file, including the manifest, byte-identical.
     save(output / "manifest.json", stamp(manifest, old_manifest, now))
     return errors
@@ -417,4 +422,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("data/derivatives"))
     args = parser.parse_args()
-    raise SystemExit(1 if collect(args.output) else 0)
+    raise SystemExit(1 if collect(args.output, calendar_fetcher=fetch_json) else 0)

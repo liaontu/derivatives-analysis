@@ -5,13 +5,15 @@ from statistics import fmean
 import math
 
 try:
+    from .trading_calendar import default_calendar
     from .warrant_spreads import exclusion, positive, style, valid_day, SAFE, VERSION as SPREAD_VERSION
 except ImportError:
+    from trading_calendar import default_calendar
     from warrant_spreads import exclusion, positive, style, valid_day, SAFE, VERSION as SPREAD_VERSION
 
-RULES = {'version': 'warrant-focus-v1', 'volumeWindow': 5, 'volumeMultiple': 2,
+RULES = {'version': 'warrant-focus-v2-trading-calendar', 'volumeWindow': 5, 'volumeMultiple': 2,
          'minVolume': 100, 'zThreshold': 2, 'wideSpreadThreshold': 20,
-         'maxSourceAgeDays': 4, 'maxBaselineAgeDays': 30, 'spreadModel': SPREAD_VERSION,
+         'maxSourceAgeTradingDays': 4, 'maxBaselineAgeDays': 30, 'spreadModel': SPREAD_VERSION,
          'basis': '已收錄行情日，非保證連續交易日；當日不進均量基準',
          'description': '固定研究觀察門檻，未經策略有效性驗證；非買賣建議或套利利潤'}
 
@@ -29,8 +31,8 @@ def source_ids(row):
             if row['market'] == 'TWSE' else ['tpex-warrants', 'tpex-terms'])
 
 
-def fresh(row, feeds, today):
-    return (valid_day(row.get('date')) and 0 <= (today - date.fromisoformat(row['date'])).days <= RULES['maxSourceAgeDays']
+def fresh(row, feeds, today, calendar=None):
+    return ((calendar or default_calendar()).fresh(row.get('date'), today, RULES['maxSourceAgeTradingDays'])
             and all(feeds.get(key, {}).get('status') == 'ok' and feeds[key].get('date') == row['date'] for key in source_ids(row)))
 
 
@@ -62,7 +64,7 @@ def volume_evidence(row, history, calendar):
             'signal': row['volume'] >= RULES['minVolume'] and multiple >= RULES['volumeMultiple']}
 
 
-def spread_evidence(catalog, data, index, feeds, today):
+def spread_evidence(catalog, data, index, feeds, today, calendar=None):
     found = defaultdict(list)
     if (not data or data.get('status') != 'ok' or index.get('status') not in ('ok', 'partial')
             or index.get('rules', {}).get('version') != SPREAD_VERSION):
@@ -75,7 +77,7 @@ def spread_evidence(catalog, data, index, feeds, today):
         point = next((p for p in pair['points'] if p[0] == data['date']), None)
         if not point:
             continue
-        if not all(fresh(r, feeds, today) and not exclusion(r) and r['date'] == data['date']
+        if not all(fresh(r, feeds, today, calendar) and not exclusion(r) and r['date'] == data['date']
                    and all(r[k] == pair[k] for k in ('underlying', 'cp', 'strike', 'expiry'))
                    and style(r['style']) == pair['style'] and r['ratio'] == pair[side]['ratio']
                    and r['price'] == point[i + 1] and r['volume'] == point[i + 3]
@@ -98,7 +100,8 @@ def spread_evidence(catalog, data, index, feeds, today):
     return found
 
 
-def build_focus(warrants, histories, spreads, index, feeds, now, today):
+def build_focus(warrants, histories, spreads, index, feeds, now, today, calendar=None):
+    calendar = calendar or default_calendar()
     calendars = defaultdict(set)
     for history in histories.values():
         for q in history.get('quotes', {}).values():
@@ -107,14 +110,14 @@ def build_focus(warrants, histories, spreads, index, feeds, now, today):
     catalog = {r['code']: r for r in warrants if duplicates[r['code']] == 1}
     paired = {}
     for code, data in spreads.items():
-        paired.update(spread_evidence(catalog, data, index, feeds, today))
+        paired.update(spread_evidence(catalog, data, index, feeds, today, calendar))
     excluded, volume_status, spread_status = Counter(), Counter(), Counter()
     items, eligible = [], 0
     for row in warrants:
         reason = '權證代碼重複' if duplicates[row['code']] > 1 else exclusion(row)
         if not reason and (row['expiry'] < today.isoformat() or (row.get('lastTrade') and row['lastTrade'] < today.isoformat())):
             reason = '目前已到期／停止交易'
-        if not reason and not fresh(row, feeds, today):
+        if not reason and not fresh(row, feeds, today, calendar):
             reason = '必要來源失敗、不同日或資料較舊'
         if reason:
             excluded[reason] += 1
@@ -154,7 +157,7 @@ def build_focus(warrants, histories, spreads, index, feeds, now, today):
     items.sort(key=priority)
     required = ['twse-warrants', 'twse-volume', 'twse-volume-put', 'tpex-warrants', 'tpex-terms']
     sources = [{'id': key, **{k: feeds.get(key, {}).get(k) for k in ('date', 'status')}} for key in required]
-    unavailable = any(s['status'] != 'ok' or not valid_day(s['date']) or not 0 <= (today - date.fromisoformat(s['date'])).days <= RULES['maxSourceAgeDays'] for s in sources)
+    unavailable = any(s['status'] != 'ok' or not calendar.fresh(s['date'], today, RULES['maxSourceAgeTradingDays']) for s in sources)
     # No run timestamps or day counters: the shortlist only changes when its inputs change.
     return {'schemaVersion': 1, 'rules': RULES,
             'status': 'partial' if unavailable or index.get('status') != 'ok' else 'ok', 'error': None,
@@ -167,13 +170,13 @@ def build_focus(warrants, histories, spreads, index, feeds, now, today):
             'coverage': {'excluded': dict(excluded), 'volume': dict(volume_status), 'spread': dict(spread_status)}, 'items': items}
 
 
-def collect_focus(output, warrants, feeds, now, today, read, save):
+def collect_focus(output, warrants, feeds, now, today, read, save, calendar=None):
     codes = sorted({r.get('underlying', '') for r in warrants if SAFE.fullmatch(str(r.get('underlying', '')))})
     histories = {code: read(output / 'warrant-history' / f'{code}.json') or {} for code in codes}
     index = read(output / 'warrant-spreads.json') or {}
     spread_codes = {i['code'] for i in index.get('items', []) if i['code'] in histories}
     spreads = {code: read(output / 'warrant-spreads' / f'{code}.json') for code in spread_codes}
-    report = build_focus(warrants, histories, spreads, index, feeds, now, today)
+    report = build_focus(warrants, histories, spreads, index, feeds, now, today, calendar)
     backfill = index.get('backfill') or {}
     days = [d for d in backfill.get('days', []) if d['status'] == 'imported']
     if days:

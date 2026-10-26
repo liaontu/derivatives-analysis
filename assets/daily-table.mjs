@@ -1,4 +1,4 @@
-import { esc, fmt, finite, warrantUnderlyings, resolveWarrantUnderlying, warrantCp, warrantStyle, daysUntil, taipeiToday, toCSV } from './model.mjs';
+import { taiwanFreshnessMessage, esc, fmt, finite, warrantUnderlyings, resolveWarrantUnderlying, warrantCp, warrantStyle, daysUntil, taipeiToday, toCSV } from './model.mjs';
 import {loadWarrants} from './catalog.mjs';
 import { change } from './watch.mjs';
 
@@ -53,7 +53,7 @@ export function observationRows(catalog, history, spreads, spreadIndex, sources 
       if (source?.date && source.date !== r.date) warnings.push(`${id} 資料日 ${source.date} 與行情日不同`);
     }
     if (!validDay(r.date)) warnings.push('行情日期缺漏');
-    else if (daysUntil(r.date, today) < -4) warnings.push('行情距今超過 4 天（可能含休市）');
+    else { const freshness = taiwanFreshnessMessage(r.date, today); if (freshness) warnings.push(freshness); }
     if (r.volume === 0) warnings.push('當筆零成交，收盤價不視為可成交價格');
     if (previous?.[2] === 0) warnings.push('前量為零：僅列張數增減，量變率不計');
     if (stopped) warnings.push('已到期／已過最後交易日');
