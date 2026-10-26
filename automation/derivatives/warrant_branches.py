@@ -155,6 +155,13 @@ def parse_page(html, code):
     return {'date': day, 'rows': rows, 'completeBranchCoverage': False, 'missingBranchMeansZero': False}
 
 
+class CatalogUnavailable(ValueError):
+    def __init__(self, latest, stale):
+        super().__init__('Warrant catalog unavailable or stale')
+        self.latest = latest
+        self.stale = stale
+
+
 def select_warrants(catalog, config, today):
     limit, watch = config['topCount'], config['watchlist']
     if type(limit) is not int or not 0 <= limit <= 300 or not isinstance(watch, list) or len(watch) > 20 or len(set(watch)) != len(watch) or any(not isinstance(c, str) or not CODE.fullmatch(c) for c in watch):
@@ -173,7 +180,8 @@ def select_warrants(catalog, config, today):
         if 0 <= (today - day).days <= 4 and (not last or last >= today.isoformat()) and (r.get('volume') or 0) > 0:
             eligible.append(r)
     if not eligible:
-        raise ValueError('Warrant catalog unavailable or stale')
+        latest = max((r['date'] for r in by_code.values()), default=None)
+        raise CatalogUnavailable(latest, bool(latest and (today-date.fromisoformat(latest)).days > 4))
     selected = sorted(eligible, key=lambda r: (-r['volume'], r['code']))[:limit]
     codes = {r['code'] for r in selected}
     issues = []
@@ -252,9 +260,14 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
         interval = max(delay, robots.crawl_delay(AGENT) or 0)
         if interval > 30:
             raise ValueError('Source crawl delay exceeds job budget')
-    except Exception:
+    except Exception as exc:
+        gate = ({'reason': 'catalog_stale' if exc.stale else 'catalog_unavailable', 'catalogDate': exc.latest, 'maxAgeDays': 4}
+                if isinstance(exc, CatalogUnavailable) else {'reason': 'catalog_or_policy_unavailable'})
+        message = (f"官方權證清單資料日 {exc.latest} 已超過 4 個日曆日；保留舊資料與續跑進度，等待新行情"
+                   if isinstance(exc, CatalogUnavailable) and exc.stale else '來源政策或官方權證清單暫不可用；保留前次資料')
+        print(json.dumps({'collectionGate': gate}, ensure_ascii=False), flush=True)
         index = {**{k: v for k, v in old_index.items() if k not in ('updatedAt', 'checkedAt')},
-                 'status': 'retained' if old_index['items'] else 'unavailable', 'error': '來源政策或官方權證清單暫不可用；保留前次資料'}
+                 'status': 'retained' if old_index['items'] else 'unavailable', 'error': message, 'collectionGate': gate}
         save(index_path, stamp(index, old_index, now))
         return ['catalog_or_policy']
     basis = hashlib.sha256(json.dumps(selected, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
