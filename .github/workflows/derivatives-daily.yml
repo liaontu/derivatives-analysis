@@ -1,0 +1,54 @@
+name: derivatives-daily
+on:
+  schedule:
+    # Taipei mornings after US close (both DST seasons), evenings after Taiwan close.
+    - cron: '43 0,3,11,14 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: derivatives-daily
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Re-runs must accumulate from the latest history, not the original run SHA.
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch official derivatives data
+        id: collect
+        continue-on-error: true
+        run: python automation/derivatives/collect.py
+      # The collector leaves unchanged files byte-identical, so an empty diff means nothing to publish.
+      - name: Commit data and source status
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/derivatives/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Checked at $(date -u +%FT%TZ): no published data changed; checking deployment recovery." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m 'data: daily official derivatives update'
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            { echo "Published data changed at $(date -u +%FT%TZ):"; echo '```'; git show --shortstat --format='%h %s' HEAD; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # A no-op collection still repairs a previously failed deployment.
+      - name: Ensure GitHub Pages is published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py
+      - name: Report unavailable sources
+        if: steps.collect.outcome == 'failure'
+        run: exit 1

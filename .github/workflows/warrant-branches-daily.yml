@@ -1,0 +1,51 @@
+name: warrant-branches-daily
+on:
+  schedule:
+    - cron: '13 12 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: derivatives-daily
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch bounded warrant rankings
+        id: collect
+        continue-on-error: true
+        run: python automation/derivatives/warrant_branches.py
+      # Unchanged rankings leave their files byte-identical, so an empty diff means nothing to publish.
+      - name: Commit rankings and source status
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/derivatives/warrant-branches*
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Checked at $(date -u +%FT%TZ): no ranking data changed; checking deployment recovery." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m 'data: daily warrant broker rankings'
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            { echo "Ranking data changed at $(date -u +%FT%TZ):"; echo '```'; git show --shortstat --format='%h %s' HEAD; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Ensure GitHub Pages is published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py
+      - name: Report unavailable sources
+        if: steps.collect.outcome == 'failure'
+        run: exit 1

@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 57,
+      "sha256": "320bc86592731ed6959d6a20115dee8a86bd4353464aa15c69edd2c0a4d9de00"
+    },
+    {
+      "path": ".github/workflows/derivatives-daily.yml",
+      "bytes": 2135,
+      "sha256": "6869a8e7ead0e9e573a65e59ff0ea6f86871c774273930c542c11c8b02a941bc"
+    },
+    {
+      "path": ".github/workflows/warrant-branches-daily.yml",
+      "bytes": 1908,
+      "sha256": "ff0bc109d36f690bd463420f5542845757c2ac7407930030d5b4639b57861975"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 25,
+      "sha256": "271540188ae129e9d99d3a8ad965db71df8c7cd7abfacb3580f60a5b61de5c1a"
+    },
+    {
+      "path": ".nojekyll",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4661,
+      "sha256": "f43cf0a4db68c04e66388c10139bce400e77f6055dac934903771f8404faa9e1"
+    },
+    {
+      "path": "assets/app.mjs",
+      "bytes": 40925,
+      "sha256": "efd793498608fc8a620495356d86022efd4f8a861f0f2f220b1de2e1492e51b5"
+    },
+    {
+      "path": "assets/branches.mjs",
+      "bytes": 12165,
+      "sha256": "88db39a51cf85fc25b9614fd4590951f02f8f296d6cb2b1cf8bfb6e75d3b5bfa"
+    },
+    {
+      "path": "assets/catalog.mjs",
+      "bytes": 897,
+      "sha256": "416bfbfceb6f4ea3a0c1fce828d7b72a6aa1d27a08faa600f2ee895abb13b03d"
+    },
+    {
+      "path": "assets/daily-table.mjs",
+      "bytes": 19128,
+      "sha256": "0b5f210f8159b544bd524e476f344794f0e376edeec0fb15047d14697bd57c7f"
+    },
+    {
+      "path": "assets/focus.mjs",
+      "bytes": 14705,
+      "sha256": "24cb4a74338bbf71942186b6b1d6e671ac452e1e9646d9e7b7f7b8f6dfc0e43c"
+    },
+    {
+      "path": "assets/governance.mjs",
+      "bytes": 8863,
+      "sha256": "c46c8ceb7e50fb227c3701061c3023f8c6524bfcd454c5933f1c80a9d5a4d585"
+    },
+    {
+      "path": "assets/lab-reports.mjs",
+      "bytes": 3994,
+      "sha256": "80cd1754cd4647e7504b948458048138c2fbdd2e4795bb04a3c743b355b557b4"
+    },
+    {
+      "path": "assets/lab.mjs",
+      "bytes": 11990,
+      "sha256": "caf8a2046f07dd9a59a50ff373b371edc19160307c93bc715e5976c306d40219"
+    },
+    {
+      "path": "assets/model.mjs",
+      "bytes": 5608,
+      "sha256": "0920eb4ed0c269e9b2afec2d105c719156a66c2b86c3420136082dc450124df5"
+    },
+    {
+      "path": "assets/spreads.mjs",
+      "bytes": 22800,
+      "sha256": "8dab4d3443c6728549575359ea402bff6033bb580b0d1a440a075f69660e2bf5"
+    },
+    {
+      "path": "assets/styles.css",
+      "bytes": 14486,
+      "sha256": "03d4201a6fec85845cdcdd59035c6c0cb96a87227259f982bdaebb137216ecbe"
+    },
+    {
+      "path": "assets/us.mjs",
+      "bytes": 11256,
+      "sha256": "b1e3073cc6aba7ec95d699b746a380b6bc362f19420ded5341307ed60d7c1168"
+    },
+    {
+      "path": "assets/watch.mjs",
+      "bytes": 17887,
+      "sha256": "9661ca94330319412e66954595a756a13394d0b342096de2c050978c316563de"
+    },
+    {
+      "path": "automation/derivatives/backfill_warrants.py",
+      "bytes": 10043,
+      "sha256": "ef2ba3817b54d6dfab16d75e029e887a2ac6e8447c39a976225b181db77de81e"
+    },
+    {
+      "path": "automation/derivatives/backfill_warrants_extended.py",
+      "bytes": 17032,
+      "sha256": "4368c0cee597e98b9ad7b26df42af7bfe7ddcadee8a8bbe54cca0d04e7e45a1a"
+    },
+    {
+      "path": "automation/derivatives/collect.py",
+      "bytes": 23877,
+      "sha256": "42c5e714e1010f6364e81c315a534528b5edefce13e87848bd8b2ca2fb1bb91e"
+    },
+    {
+      "path": "automation/derivatives/ensure_pages.py",
+      "bytes": 1904,
+      "sha256": "2131d36e9066536396a2e1f9e8236129a7ee269c1ae70c2585dbff33a3a08fdb"
+    },
+    {
+      "path": "automation/derivatives/governance.py",
+      "bytes": 6366,
+      "sha256": "9bb18fb64694b0c6bea61aa53efc280176ff374b42be993ce2f2b361b72670b8"
+    },
+    {
+      "path": "automation/derivatives/publication.py",
+      "bytes": 461,
+      "sha256": "334e92661f46813b99ba5bfb90b9ee11868d795eb07e42cc6e7e5c75cc9fb335"
+    },
+    {
+      "path": "automation/derivatives/us_sources.py",
+      "bytes": 9125,
+      "sha256": "43416d0dcfad3e12793d7bbfeca7754d08547cc07aacb28ec14fa3540c31d621"
+    },
+    {
+      "path": "automation/derivatives/warrant-branches.json",
+      "bytes": 69,
+      "sha256": "e93824d78451d34a0c7b5a489dcffb742fbab88b7a33f3fde9e249a2e29ef798"
+    },
+    {
+      "path": "automation/derivatives/warrant_branches.py",
+      "bytes": 14525,
+      "sha256": "dd0dc900de8711ebffd611e1d63b8fb8b2d739c7746f7d2ca032d381d2065643"
+    },
+    {
+      "path": "automation/derivatives/warrant_catalog.py",
+      "bytes": 1032,
+      "sha256": "2e278b1ef729975249fe94cdd4c518e83b32192923c8b0ec5af656fa99094ce4"
+    },
+    {
+      "path": "automation/derivatives/warrant_focus.py",
+      "bytes": 11452,
+      "sha256": "18487cd76e91cc5ddb25e4e29f548e72e8b9e65732c2f958e1ffb7a94dd749f3"
+    },
+    {
+      "path": "automation/derivatives/warrant_history.py",
+      "bytes": 3749,
+      "sha256": "2d2d07f76b9d590aac137887ff9e44bc22ea7a07fcd6f872b892ef18b6786c64"
+    },
+    {
+      "path": "automation/derivatives/warrant_lab.py",
+      "bytes": 20101,
+      "sha256": "b7526a4c46a02a7c8e0a4a1b302e7e23e0e7893fadc8672ea7569d5e5aa5447a"
+    },
+    {
+      "path": "automation/derivatives/warrant_lab_reports.py",
+      "bytes": 14283,
+      "sha256": "5e4a8e5b5e64f8c2795c86b99556347f68cfe51f19a98052c163678a2944c82c"
+    },
+    {
+      "path": "automation/derivatives/warrant_spreads.py",
+      "bytes": 16336,
+      "sha256": "8a01e8a671a7f534173db5273aa003ef1ff5ba9d80d79739ad912b1a39a357ec"
+    },
+    {
+      "path": "index.html",
+      "bytes": 3076,
+      "sha256": "c14bee4d5c1719972179ccea22fa9cd9b57ec6608013c6f4e9145763a5bfa878"
+    }
+  ]
+}
