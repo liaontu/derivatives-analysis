@@ -50,7 +50,7 @@ export function createUSPages(ui) {
     const monthly = data.rows.filter(r => r.contract === 'VX' && /^VX\/[A-Z]\d+$/.test(r.symbol)).sort((a, b) => a.expiry.localeCompare(b.expiry));
     const cot = await cotPanel(false);
     return `<div class="coverage">免費涵蓋 CFTC 金融與商品期貨籌碼，以及 CFE 公開期貨結算價。S&P 500、NASDAQ、黃金、原油等可查 COT 籌碼；此版本未提供 CME 全商品每日行情。</div>
-      <div class="metrics">${metric('VIX 期貨・近月月契約', fmt(monthly[0]?.price, 4), `${monthly[0]?.symbol || '—'} · ${data.date || '尚無資料'}`)}${metric('CFE 結算價', fmt(data.rows.length), '個契約 · 交易所每日結算')}${metric('CFTC 籌碼', '每週', '每天自動檢查新報告')}${metric('美國盤後抓取', '08:43', '台北時間 · 11:43 再次更新')}</div>
+      <div class="metrics">${metric('VIX 期貨・近月月契約', fmt(monthly[0]?.price, 4), `${monthly[0]?.symbol || '—'} · ${data.date || '尚無資料'}`)}${metric('CFE 結算價', fmt(data.rows.length), '個契約 · 交易所每日結算')}${metric('CFTC 籌碼', '每週', '每天自動檢查新報告')}${metric('美國盤後抓取', '08:23', '台北預定 · 11:23 補查，可能延遲')}</div>
       ${cot}<section class="panel"><div class="panel-head"><div><span class="eyebrow">CFE · DAILY SETTLEMENT</span><h2>美國期貨每日結算價</h2></div>${dateTag(data.date, '美國資料日')}</div>${warning}<div class="filters compact">${select('us-future-product', '商品', contracts, state.usFuture, c => `${c} · ${cfeNames[c] || c}`)}</div>${table(['契約', '到期日', '每日結算價'], quotes.map(r => tr([esc(r.symbol), esc(r.expiry), fmt(r.price, 4)])))}<p class="note">Cboe Futures Exchange（CFE）公布的每日結算價；不是最後成交價或即時報價。價格單位依商品規格，部分結算價由交易所裁量決定，詳見<a class="text-link" href="https://www.cboe.com/markets/us/futures/market-statistics/settlement/futures/daily" target="_blank" rel="noopener noreferrer">官方原表</a>。</p></section>`;
   }
 

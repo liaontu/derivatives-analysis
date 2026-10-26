@@ -8,14 +8,12 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
-import gzip
 import io
 import json
 import math
 import re
 import time
 import urllib.request
-import zlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 try:
@@ -269,21 +267,19 @@ def read_feeds(output):
 
 
 def save(path, obj):
-    """Write JSON and gzip only when the published bytes change; identical content is left untouched."""
+    """Publish canonical JSON; HTTP compression is provided by the static host."""
     data = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
     compressed = path.with_suffix(path.suffix + ".gz")
-    try:
-        if path.read_bytes() == data and gzip.decompress(compressed.read_bytes()) == data:
-            return False
-    except (OSError, EOFError, ValueError, zlib.error):
-        pass
+    removed = compressed.exists()
+    if removed:
+        compressed.unlink()
+        WRITTEN.add(compressed)
+    if path.is_file() and path.read_bytes() == data:
+        return removed
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".tmp")
     temp.write_bytes(data)
     temp.replace(path)
-    temp = compressed.with_suffix(".tmp")
-    temp.write_bytes(gzip.compress(data, mtime=0))
-    temp.replace(compressed)
     WRITTEN.add(path)
     return True
 
@@ -410,7 +406,7 @@ def collect(output, fetcher=fetch, now=None):
         errors.append('warrant-lab-reports')
         print(json.dumps({'feed': 'warrant-lab-reports', 'status': 'retained', 'error': type(exc).__name__}))
     manifest = {"schemaVersion": 5, "sources": statuses, "warrantCount": len(warrants),
-                "schedule": "每日台北時間 08:43、11:43、19:43、22:43；內容未變動時不重新發布"}
+                "schedule": "預定台北 08:23、11:23，以及 18:23 至 23:23 每小時檢查；可能延遲或漏跑，內容未變動不重新發布"}
     collect_quality(output, manifest, read, save, today, now)
     # An unchanged rerun leaves every file, including the manifest, byte-identical.
     save(output / "manifest.json", stamp(manifest, old_manifest, now))

@@ -4,7 +4,7 @@ https://liaontu.github.io/derivatives-analysis/
 
 台灣期權、權證；美國 CFTC 週報、Cboe 選擇權統計與 CFE 期貨結算價。每日觀察保留權證及其標的收盤價最近 60 個資料日；不抓現股分點。另有富邦權證分點排行（非全部分點）。
 
-每日台北時間 08:43、11:43、19:43、22:43 由公開儲存庫標準 Ubuntu runner 更新，使用 Python 標準函式庫；無 API 金鑰、付費主機、付費行情、cache 或 artifacts。內容沒有變動時不提交；已成功部署的同一版本不重建，先前失敗或尚未部署時會重試。GitHub Pages 免費託管，排程可能延遲。
+預定台北時間 08:23、11:23，以及 18:23 至 23:23 每小時檢查，由公開儲存庫標準 Ubuntu runner 執行，使用 Python 標準函式庫；無 API 金鑰、付費主機、付費行情、cache 或 artifacts。內容沒有變動時不提交；已成功部署的同一版本不重建，先前失敗或尚未部署時會重試。GitHub Pages 免費託管，排程可能延遲或漏跑，並非準時更新保證；實際資料日與來源狀態以頁面為準。共用寫入群組允許排隊，同版本短時間內成功的重複檢查會略過。
 
 資料源：臺灣期交所、證交所、櫃買中心、CFTC、Cboe。CFTC 為週報，日排程只檢查新發布；不含 CME 全行情或美股完整選擇權鏈。本站為整理後資料，各項資料日與更新狀態在網站標示；來源失敗保留最後成功值。法人歷史自啟用後累積最近 60 個資料日。非即時行情，僅供研究。
 
@@ -12,7 +12,7 @@ https://liaontu.github.io/derivatives-analysis/
 
 上市歷史補抓：官方最近一個月的歷史行情／條款與認購、認售成交量逐日核對後匯入。較早區段僅納入有 MOPS 生效調整公告、且與保存條款核對通過的權證，存在樣本選擇偏差；不把最新條款倒套舊價。資料涵蓋、無報表日期與失敗原因見價差頁面及 data/derivatives/warrant-backfill.json；上櫃及分點排行未補抓；標的價格僅採同日報表明列且代碼吻合者。完整日報區段的條款依各日報表（發行人前一營業日申報）；較早區段依生效公告。來源可能修訂，未另驗證盤中條款異動。
 
-權證分點來源：富邦證券公開網站／嘉實資訊；買超與賣超各最多 15 名，非全部分點。每天台北 20:13 更新成交量前 300 檔＋固定清單（設定見 automation/derivatives/warrant-branches.json）；每檔最多累積 30 個資料日。未列入不代表零交易，不查現股。
+權證分點來源：富邦證券公開網站／嘉實資訊；買超與賣超各最多 15 名，非全部分點。預定台北 20:13、22:13、23:13 檢查；在成交量前 300 檔＋固定清單的原總量上限內，保留跨日未完成項目與今日熱門名額（設定見 automation/derivatives/warrant-branches.json）。每檔最多累積 30 個資料日。未列入不代表零交易，不查現股。
 
 資料品質與驗證：#quality 顯示來源品質、時間戳、發布內容校驗碼及最近檢查紀錄；治理規則隨免費日排程執行。收盤價差回測維持 Walk-forward Research，正式模型資格為否、Live OOS 為 0；歷史修訂可重算，不冒充即時績效。
 
@@ -24,7 +24,7 @@ https://liaontu.github.io/derivatives-analysis/
 
 本機更新：`python automation/derivatives/collect.py`。工作流程核對 Pages 最新 build 與 HEAD，必要時明確呼叫 build API。
 
-權證預設按標的載入 `warrant-catalog.json` 與 `warrants-by-underlying/<代碼>.json`；完整市場清單須明確選取。保留完整 `warrants.json` 供離線工具與舊版相容。
+權證預設按標的載入 `warrant-catalog.json` 與 `warrants-by-underlying/<代碼>.json`；完整市場清單須明確選取。保留完整 `warrants.json` 供分點 collector、離線工具與舊版相容。只發布 JSON，由 GitHub Pages 透過 HTTP 壓縮傳輸，不再另存或請求 `.json.gz`。既有 Git 歷史不改寫。
 
 分點更新保留部分完成進度，接近時間預算時暫停並在下次接續；遇 401、403、429 停止後續請求，不增加並行量或繞過限制。公開可讀與 robots 允許不等於轉發授權；來源授權範圍仍須獨立確認。
 

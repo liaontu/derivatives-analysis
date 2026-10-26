@@ -22,7 +22,7 @@ except ImportError:
 ORIGIN = 'https://fubon-ebrokerdj.fbs.com.tw'
 AGENT = 'DerivativesAnalysis-WarrantRankings/1.0'
 CODE = re.compile(r'\d{5}[0-9A-Z]')
-SCHEDULE = '每日台北時間 20:13；平台排程可能延遲'
+SCHEDULE = '預定台北 20:13、22:13、23:13 檢查；可能延遲或漏跑'
 
 
 def source_url(code):
@@ -210,8 +210,28 @@ def update_warrant(quote, old, html, now, today):
     return payload
 
 
+def continuation_plan(catalog, config, today, prior, now):
+    current, issues = select_warrants(catalog, config, today)
+    by_code = {q['code']: q for q in catalog if CODE.fullmatch(q.get('code', '')) and q.get('market') in ('TWSE', 'TPEX') and q.get('cp') in ('C', 'P')}
+    pending = []
+    for code in prior.get('remaining', []):
+        q = by_code.get(code)
+        if q and 0 <= (today-date.fromisoformat(q['date'])).days <= 4 and (q.get('lastTrade') or q.get('expiry') or '9999') >= today.isoformat():
+            pending.append(code)
+    # Carry-over uses at most half the normal quota; today's hot list still gets a turn.
+    selected = [q for q in current if q['code'] in config['watchlist']]
+    capacity = len(current)
+    carry_limit = min(max(1, config['topCount']//2), max(0, capacity-len(selected))) if config['topCount'] else 0
+    carry = [by_code[c] for c in pending if prior.get('failures', {}).get(c, {}).get('retryAfter', '') <= now]
+    for q in carry[:carry_limit] + current:
+        if len(selected) < capacity and all(x['code'] != q['code'] for x in selected):
+            selected.append(q)
+    return selected, issues, pending if capacity else []
+
+
 def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=900, clock=time.monotonic):
     now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
+    now = datetime.fromisoformat(now).astimezone(timezone.utc).isoformat(timespec='seconds')
     today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
     started = clock()
     WRITTEN.clear()
@@ -219,7 +239,9 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
     old_index = read(index_path) or {'items': []}
     errors = []
     try:
-        selected, issues = select_warrants((read(output / 'warrants.json') or {})['rows'], config, today)
+        catalog = (read(output / 'warrants.json') or {})['rows']
+        prior = old_index.get('progress') or {}
+        selected, issues, pending = continuation_plan(catalog, config, today, prior, now)
         robots = RobotFileParser()
         try:
             robots.parse(fetcher(ORIGIN + '/robots.txt').splitlines())
@@ -238,6 +260,8 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
     basis = hashlib.sha256(json.dumps(selected, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     prior = old_index.get('progress') or {}
     completed = set(prior.get('completed', [])) if prior.get('basis') == basis else set()
+    completed_for = dict(prior.get('completedFor', {}))
+    failures = dict(prior.get('failures', {}))
     items, deferred = [], []
     stopped = False
     for quote in selected:
@@ -248,9 +272,13 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
         try:
             if not robots.can_fetch(AGENT, source_url(code)):
                 raise ValueError('Source disallows collection')
-            if code in completed and old and old.get('status') == 'ok':
+            version = {'date': quote['date'], 'volume': quote.get('volume')}
+            if (code in completed or completed_for.get(code) == version) and old and old.get('status') == 'ok' and old.get('date') == quote['date']:
                 payload = old
             else:
+                if failures.get(code, {}).get('retryAfter', '') > now:
+                    deferred.append(code)
+                    raise TimeoutError('Repeated failures are cooling down')
                 # Reserve both HTTP timeouts and retry delay before starting another item.
                 if stopped or clock() - started + interval + 30 + max(3, interval) >= budget_seconds:
                     deferred.append(code)
@@ -258,12 +286,19 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
                 sleeper(interval)
                 payload = update_warrant(quote, old, fetch_with_retry(source_url(code), fetcher, sleeper, interval), now, today)
                 completed.add(code)
+                completed_for[code] = version
+                failures.pop(code, None)
         except Exception as exc:
             if isinstance(exc, HTTPError) and exc.code in (401, 403, 429):
                 stopped = True
             print(json.dumps({'warrant': code, 'failureType': type(exc).__name__,
                               'httpStatus': exc.code if isinstance(exc, HTTPError) else None}), flush=True)
             errors.append(code)
+            if code not in deferred:
+                count = failures.get(code, {}).get('count', 0) + 1
+                failures[code] = {'count': count}
+                if count >= 3:
+                    failures[code]['retryAfter'] = (datetime.fromisoformat(now)+timedelta(hours=24)).isoformat(timespec='seconds')
             error = ('時間預算或來源限制暫停；保留資料待續跑' if code in deferred else '來源暫不可用、日期異常或欄位改變')
             payload = {**(old or {'code': code, 'date': None, 'history': [], 'fetchedAt': None,
                                  'sourceUrl': source_url(code), 'completeBranchCoverage': False, 'missingBranchMeansZero': False}),
@@ -276,15 +311,24 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
                       'fetchedAt': payload['fetchedAt'], 'fixed': code in config['watchlist'],
                       'count': len(payload['history'][0]['rows']) if payload['history'] else 0})
         print(json.dumps({'warrant': code, 'date': payload['date'], 'status': payload['status']}, ensure_ascii=False), flush=True)
-    index = {'schemaVersion': 1, 'status': 'partial' if errors else 'ok',
+    remaining = list(dict.fromkeys([c for c in pending if c not in {q['code'] for q in selected}] + errors))
+    # Keep the oldest backlog bounded and report overflow rather than growing forever.
+    cap = max(1, 2*config['topCount']+len(config['watchlist']))
+    if len(remaining) > cap:
+        issues.append({'reason': '待續跑清單超過容量；保留最早未完成項目', 'overflow': len(remaining)-cap})
+        remaining = remaining[:cap]
+    index = {'schemaVersion': 2, 'status': 'partial' if remaining else 'ok',
              'schedule': SCHEDULE, 'topCount': config['topCount'], 'watchlist': config['watchlist'],
-             'issues': issues, 'items': items, 'errorCount': len(errors), 'error': None,
+             'issues': issues, 'items': sorted(items, key=lambda item: item['code']), 'errorCount': len(remaining), 'error': None,
              'completeBranchCoverage': False, 'missingBranchMeansZero': False}
-    if errors:
-        index['progress'] = {'basis': basis, 'completed': sorted(completed), 'remaining': errors,
+    if remaining:
+        relevant = {q['code'] for q in selected} | set(remaining)
+        index['progress'] = {'basis': basis, 'completed': sorted(completed), 'remaining': remaining,
+                             'completedFor': {c: v for c, v in completed_for.items() if c in relevant},
+                             'failures': {c: v for c, v in failures.items() if c in remaining},
                              'pausedBySource': stopped, 'budgetSeconds': budget_seconds}
     save(index_path, stamp(index, old_index, now))
-    return errors
+    return remaining
 
 
 if __name__ == '__main__':
