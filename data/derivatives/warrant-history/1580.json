@@ -1,1 +1,1 @@
-{"schemaVersion":1,"underlying":"1580","name":"新麥","quotes":{"716517":{"name":"新麥國票6A購01","market":"TPEX","cp":"C","expiry":"2027-10-12","strike":140.0,"style":"美式","rows":[["2026-10-22",null,0.0]]}},"underlyingPrices":[["2026-10-22",95.8]]}
+{"schemaVersion":1,"underlying":"1580","name":"新麥","quotes":{"716517":{"name":"新麥國票6A購01","market":"TPEX","cp":"C","expiry":"2027-10-12","strike":140.0,"style":"美式","rows":[["2026-10-22",null,0.0],["2026-10-27",null,0.0]]}},"underlyingPrices":[["2026-10-22",95.8],["2026-10-27",95.9]]}

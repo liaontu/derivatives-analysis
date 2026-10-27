@@ -1,1 +1,1 @@
-{"schemaVersion":1,"underlying":"7709","name":"榮田","quotes":{"711548":{"name":"榮田國票61購01","market":"TPEX","cp":"C","expiry":"2027-01-21","strike":85.0,"style":"美式","rows":[["2026-10-22",0.66,1219.0]]}},"underlyingPrices":[["2026-10-22",75.8]]}
+{"schemaVersion":1,"underlying":"7709","name":"榮田","quotes":{"711548":{"name":"榮田國票61購01","market":"TPEX","cp":"C","expiry":"2027-01-21","strike":85.0,"style":"美式","rows":[["2026-10-22",0.66,1219.0],["2026-10-27",null,0.0]]}},"underlyingPrices":[["2026-10-22",75.8],["2026-10-27",75.1]]}

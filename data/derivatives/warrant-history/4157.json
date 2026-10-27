@@ -1,1 +1,1 @@
-{"schemaVersion":1,"underlying":"4157","name":"太景*-K","quotes":{"708026":{"name":"太景*國票5B購01","market":"TPEX","cp":"C","expiry":"2026-11-30","strike":14.0,"style":"美式","rows":[["2026-10-22",0.03,511.0]]}},"underlyingPrices":[["2026-10-22",8.85]]}
+{"schemaVersion":1,"underlying":"4157","name":"太景*-K","quotes":{"708026":{"name":"太景*國票5B購01","market":"TPEX","cp":"C","expiry":"2026-11-30","strike":14.0,"style":"美式","rows":[["2026-10-22",0.03,511.0],["2026-10-27",0.02,1559.0]]}},"underlyingPrices":[["2026-10-22",8.85],["2026-10-27",8.72]]}
