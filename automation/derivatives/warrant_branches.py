@@ -43,7 +43,12 @@ def fetch(url):
         blob = response.read(2_000_001)
         if len(blob) > 2_000_000:
             raise ValueError('Response too large')
-        return blob.decode(response.headers.get_content_charset() or 'cp950', errors='strict')
+        encoding = response.headers.get_content_charset() or 'cp950'
+        # This source labels CP950 text as Big5 (e.g. 啟碁 uses extension F9D6).
+        # Keep strict decoding so truly malformed bytes still stop collection.
+        if encoding.lower() in ('big5', 'big-5', 'csbig5'):
+            encoding = 'cp950'
+        return blob.decode(encoding, errors='strict')
 
 
 def fetch_with_retry(url, fetcher, sleeper, interval):
@@ -299,7 +304,9 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             if not robots.can_fetch(AGENT, source_url(code)):
                 raise ValueError('Source disallows collection')
             version = {'date': quote['date'], 'volume': quote.get('volume')}
-            if (code in completed or completed_for.get(code) == version) and old and old.get('status') == 'ok' and old.get('date') == quote['date']:
+            # A valid source can lag the official quote day. Reuse that completed
+            # fetch within this continuation; changing quote versions still refetches.
+            if (code in completed or completed_for.get(code) == version) and old and old.get('status') == 'ok' and calendar.fresh(old.get('date'), today):
                 payload = old
             else:
                 if failures.get(code, {}).get('retryAfter', '') > now:

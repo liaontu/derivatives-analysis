@@ -163,8 +163,8 @@
     },
     {
       "path": "automation/derivatives/warrant_branches.py",
-      "bytes": 22138,
-      "sha256": "6c0e417271efb3c33d929a34dfb85932b1c8a934b618e611632d2991936361c3"
+      "bytes": 22594,
+      "sha256": "a5cc24f658c753c14f8841429a96a1a6bf01b5ac78357a6985198f7c0b4b4c4a"
     },
     {
       "path": "automation/derivatives/warrant_catalog.py",
