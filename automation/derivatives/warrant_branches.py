@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 import json
 import hashlib
+import os
 from pathlib import Path
 import re
 import time
@@ -286,7 +287,8 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
     completed = set(prior.get('completed', [])) if prior.get('basis') == basis else set()
     completed_for = dict(prior.get('completedFor', {}))
     failures = dict(prior.get('failures', {}))
-    items, deferred = [], []
+    items, deferred, budget_deferred, cooldown_deferred = [], [], [], []
+    newly_completed = 0
     stopped = False
     for quote in selected:
         code = quote['code']
@@ -302,15 +304,19 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             else:
                 if failures.get(code, {}).get('retryAfter', '') > now:
                     deferred.append(code)
+                    cooldown_deferred.append(code)
                     raise TimeoutError('Repeated failures are cooling down')
                 # Reserve both HTTP timeouts and retry delay before starting another item.
                 if stopped or clock() - started + interval + 30 + max(3, interval) >= budget_seconds:
                     deferred.append(code)
+                    if not stopped:
+                        budget_deferred.append(code)
                     raise TimeoutError('Collection paused for a bounded continuation')
                 sleeper(interval)
                 payload = update_warrant(quote, old, fetch_with_retry(source_url(code), fetcher, sleeper, interval), now, today, calendar)
                 completed.add(code)
                 completed_for[code] = version
+                newly_completed += 1
                 failures.pop(code, None)
         except Exception as exc:
             if isinstance(exc, HTTPError) and exc.code in (401, 403, 429):
@@ -350,14 +356,50 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
         index['progress'] = {'basis': basis, 'completed': sorted(completed), 'remaining': remaining,
                              'completedFor': {c: v for c, v in completed_for.items() if c in relevant},
                              'failures': {c: v for c, v in failures.items() if c in remaining},
-                             'pausedBySource': stopped, 'budgetSeconds': budget_seconds}
+                             'pausedBySource': stopped, 'budgetSeconds': budget_seconds,
+                             'budgetDeferred': budget_deferred, 'cooldownDeferred': cooldown_deferred,
+                             'backlogDeferred': [c for c in remaining if c not in {q['code'] for q in selected}],
+                             'newlyCompleted': newly_completed}
     save(index_path, stamp(index, old_index, now))
     return remaining
 
 
-if __name__ == '__main__':
+def batch_result(index):
+    """Only productive, budget-only pauses may start another automatic batch."""
+    progress = index.get('progress') or {}
+    remaining = progress.get('remaining') or []
+    resume = bool(index.get('status') == 'partial' and not index.get('collectionGate')
+                  and remaining and progress.get('budgetDeferred')
+                  and progress.get('newlyCompleted', 0) > 0
+                  and not progress.get('pausedBySource') and not progress.get('failures')
+                  and not progress.get('cooldownDeferred')
+                  and set(remaining) <= set(progress['budgetDeferred']) | set(progress.get('backlogDeferred', [])))
+    return {'resume': resume, 'remaining': len(remaining),
+            'state': 'complete' if index.get('status') == 'ok' else 'budget' if resume else 'blocked'}
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=Path('data/derivatives'))
     parser.add_argument('--config', type=Path, default=Path('automation/derivatives/warrant-branches.json'))
-    args = parser.parse_args()
-    raise SystemExit(1 if collect(args.output, read(args.config), calendar_fetcher=fetch_json) else 0)
+    parser.add_argument('--budget-seconds', type=int, default=900)
+    parser.add_argument('--allow-budget-continuation', action='store_true')
+    args = parser.parse_args(argv)
+    if not 60 <= args.budget_seconds <= 900:
+        parser.error('--budget-seconds must be between 60 and 900')
+    remaining = collect(args.output, read(args.config), budget_seconds=args.budget_seconds, calendar_fetcher=fetch_json)
+    index = read(args.output/'warrant-branches.json')
+    result = batch_result(index)
+    result['resume'] = result['resume'] and args.allow_budget_continuation
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
+            stream.write(f"resume={str(result['resume']).lower()}\nremaining={result['remaining']}\n")
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
+            stream.write(f"\nWarrant batch: {result['state']}; {sum(i.get('status') == 'ok' for i in index.get('items', []))}/{len(index.get('items', []))} available; {result['remaining']} pending; automatic continuation: {result['resume']}.\n")
+    print(json.dumps({'batch': result}), flush=True)
+    return 1 if remaining and not result['resume'] else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

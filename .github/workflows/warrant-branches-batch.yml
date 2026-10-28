@@ -1,0 +1,71 @@
+name: warrant-branches-batch
+on:
+  workflow_call:
+    inputs:
+      check_gate:
+        type: boolean
+        default: false
+      budget_seconds:
+        type: number
+        default: 900
+    outputs:
+      resume:
+        description: 'A productive batch paused only because of its time budget'
+        value: ${{ jobs.update.outputs.resume }}
+permissions:
+  actions: read
+  contents: write
+  pages: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      resume: ${{ steps.collect.outputs.resume }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Skip recently completed duplicate checks
+        id: gate
+        if: inputs.check_gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/schedule_health.py --gate warrant-branches-daily.yml --minutes 90
+      - name: Fetch bounded warrant rankings
+        id: collect
+        if: ${{ !inputs.check_gate || steps.gate.outputs.run == 'true' }}
+        continue-on-error: true
+        env:
+          BUDGET_SECONDS: ${{ inputs.budget_seconds }}
+        run: python automation/derivatives/warrant_branches.py --allow-budget-continuation --budget-seconds "$BUDGET_SECONDS"
+      # Save each batch before another runner reads its remaining/completed records.
+      - name: Commit rankings and source status
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/derivatives/warrant-branches*
+          if [ -f data/derivatives/trading-calendar.json ]; then
+            git add data/derivatives/trading-calendar.json
+          fi
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Checked at $(date -u +%FT%TZ): no ranking data changed; checking deployment recovery." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m 'data: daily warrant broker rankings'
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            { echo "Ranking data changed at $(date -u +%FT%TZ):"; echo '```'; git show --shortstat --format='%h %s' HEAD; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Ensure GitHub Pages is published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py
+      - name: Report unavailable sources
+        if: steps.collect.outcome == 'failure'
+        run: exit 1

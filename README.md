@@ -26,6 +26,6 @@ https://liaontu.github.io/derivatives-analysis/
 
 權證預設按標的載入 `warrant-catalog.json` 與 `warrants-by-underlying/<代碼>.json`；完整市場清單須明確選取。保留完整 `warrants.json` 供分點 collector、離線工具與舊版相容。只發布 JSON，由 GitHub Pages 透過 HTTP 壓縮傳輸，不再另存或請求 `.json.gz`。既有 Git 歷史不改寫。
 
-分點更新保留部分完成進度，接近時間預算時暫停並在下次接續；遇 401、403、429 停止後續請求，不增加並行量或繞過限制。公開可讀與 robots 允許不等於轉發授權；來源授權範圍仍須獨立確認。
+分點每批最多收集 15 分鐘，僅因時間預算暫停且有進展時，同次排程自動開新批續跑，沿用已完成項目，最多三批。仍未完成會保留進度、回報並由下次排程接續。遇 401、403、429、資料錯誤、冷卻或零進展不立即續抓。來源限速維持，不增加並行量或繞過限制。公開可讀與 robots 允許不等於轉發授權；來源授權範圍仍須獨立確認。
 
 程式發布以白名單匯出並附 `publication-checksums.json`；資料檔不在這份程式校驗清單內。

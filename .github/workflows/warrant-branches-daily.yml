@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '13 12,14,15 * * *'
   workflow_dispatch:
+    inputs:
+      initial_budget_seconds:
+        description: 'First batch budget (60–900 seconds; shorter values exercise automatic continuation)'
+        type: number
+        default: 900
 permissions:
   actions: read
   contents: write
@@ -14,49 +19,25 @@ concurrency:
 jobs:
   update:
     if: github.event.repository.private == false
+    uses: ./.github/workflows/warrant-branches-batch.yml
+    with:
+      check_gate: true
+      budget_seconds: ${{ inputs.initial_budget_seconds || 900 }}
+  continue_1:
+    needs: update
+    if: needs.update.outputs.resume == 'true'
+    uses: ./.github/workflows/warrant-branches-batch.yml
+  continue_2:
+    needs: continue_1
+    if: needs.continue_1.outputs.resume == 'true'
+    uses: ./.github/workflows/warrant-branches-batch.yml
+  report_budget_limit:
+    needs: continue_2
+    if: needs.continue_2.outputs.resume == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 1
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Skip recently completed duplicate checks
-        id: gate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python automation/derivatives/schedule_health.py --gate warrant-branches-daily.yml --minutes 90
-      - name: Fetch bounded warrant rankings
-        id: collect
-        if: steps.gate.outputs.run == 'true'
-        continue-on-error: true
-        run: python automation/derivatives/warrant_branches.py
-      # Unchanged rankings leave their files byte-identical, so an empty diff means nothing to publish.
-      - name: Commit rankings and source status
-        id: commit
+      - name: Report bounded continuation limit
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/derivatives/warrant-branches*
-          if [ -f data/derivatives/trading-calendar.json ]; then
-            git add data/derivatives/trading-calendar.json
-          fi
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Checked at $(date -u +%FT%TZ): no ranking data changed; checking deployment recovery." >> "$GITHUB_STEP_SUMMARY"
-          else
-            git commit -m 'data: daily warrant broker rankings'
-            git pull --rebase origin main
-            git push origin HEAD:main
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            { echo "Ranking data changed at $(date -u +%FT%TZ):"; echo '```'; git show --shortstat --format='%h %s' HEAD; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: Ensure GitHub Pages is published
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python automation/derivatives/ensure_pages.py
-      - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure'
-        run: exit 1
+          echo 'Three productive batches completed but rankings remain pending. Progress is saved; the next scheduled run will resume.' >> "$GITHUB_STEP_SUMMARY"
+          exit 1
