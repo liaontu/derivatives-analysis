@@ -120,9 +120,19 @@ def parse_page(html, code):
     if not re.search(r'單位[：:]\s*張', plain):
         raise ValueError('Unknown source unit')
     match = re.search(r'最後更新日[：:]\s*(\d{4}/\d{2}/\d{2})', plain)
-    if not match:
-        raise ValueError('Missing source date')
-    day = date.fromisoformat(match[1].replace('/', '-')).isoformat()
+    if match:
+        source_day = match[1]
+    else:
+        short = re.search(r'最後更新日[：:]\s*(\d{2}/\d{2})(?![\d/])', plain)
+        # Current-day pages abbreviate the label but expose the full date in a
+        # literal toDay field. Read data only; never execute the source script.
+        full_dates = set(re.findall(r'''\bvar\s+toDay\s*=\s*['"](\d{4}/\d{2}/\d{2})['"]''', html))
+        if not short or len(full_dates) != 1:
+            raise ValueError('Missing or ambiguous source date')
+        source_day = full_dates.pop()
+        if source_day[5:] != short[1]:
+            raise ValueError('Inconsistent source date')
+    day = date.fromisoformat(source_day.replace('/', '-')).isoformat()
     rows, counts = [], {'buy': 0, 'sell': 0}
     for cells in parser.rows:
         if not any('zco0.djhtm?' in (c['href'] or '') for c in cells):
@@ -251,7 +261,7 @@ def continuation_plan(catalog, config, today, prior, now, calendar=None):
     return selected, issues, pending if capacity else []
 
 
-def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=900, clock=time.monotonic, calendar_fetcher=None):
+def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep, budget_seconds=900, clock=time.monotonic, calendar_fetcher=None, continuation=False):
     now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     now = datetime.fromisoformat(now).astimezone(timezone.utc).isoformat(timespec='seconds')
     today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
@@ -292,7 +302,7 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
     completed = set(prior.get('completed', [])) if prior.get('basis') == basis else set()
     completed_for = dict(prior.get('completedFor', {}))
     failures = dict(prior.get('failures', {}))
-    items, deferred, budget_deferred, cooldown_deferred = [], [], [], []
+    items, deferred, budget_deferred, cooldown_deferred, failed_deferred = [], [], [], [], []
     newly_completed = 0
     stopped = False
     for quote in selected:
@@ -309,6 +319,10 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             if (code in completed or completed_for.get(code) == version) and old and old.get('status') == 'ok' and calendar.fresh(old.get('date'), today):
                 payload = old
             else:
+                if continuation and code in failures:
+                    deferred.append(code)
+                    failed_deferred.append(code)
+                    raise TimeoutError('Already attempted in this workflow; defer to a later scheduled run')
                 if failures.get(code, {}).get('retryAfter', '') > now:
                     deferred.append(code)
                     cooldown_deferred.append(code)
@@ -336,7 +350,10 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
                 failures[code] = {'count': count}
                 if count >= 3:
                     failures[code]['retryAfter'] = (datetime.fromisoformat(now)+timedelta(hours=24)).isoformat(timespec='seconds')
-            error = ('時間預算或來源限制暫停；保留資料待續跑' if code in deferred else '來源暫不可用、日期異常或欄位改變')
+            if code in failed_deferred:
+                error = (old or {}).get('error') or '來源暫不可用、日期異常或欄位改變'
+            else:
+                error = ('時間預算或來源限制暫停；保留資料待續跑' if code in deferred else '來源暫不可用、日期異常或欄位改變')
             payload = {**(old or {'code': code, 'date': None, 'history': [], 'fetchedAt': None,
                                  'sourceUrl': source_url(code), 'completeBranchCoverage': False, 'missingBranchMeansZero': False}),
                        'status': 'retained' if old and old.get('history') else 'unavailable'}
@@ -372,15 +389,14 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
 
 
 def batch_result(index):
-    """Only productive, budget-only pauses may start another automatic batch."""
+    """Continue unattempted work; failed items wait for a later scheduled run."""
     progress = index.get('progress') or {}
     remaining = progress.get('remaining') or []
     resume = bool(index.get('status') == 'partial' and not index.get('collectionGate')
-                  and remaining and progress.get('budgetDeferred')
+                  and remaining and (progress.get('budgetDeferred') or progress.get('backlogDeferred'))
                   and progress.get('newlyCompleted', 0) > 0
-                  and not progress.get('pausedBySource') and not progress.get('failures')
-                  and not progress.get('cooldownDeferred')
-                  and set(remaining) <= set(progress['budgetDeferred']) | set(progress.get('backlogDeferred', [])))
+                  and not progress.get('pausedBySource')
+                  and set(remaining) <= set(progress.get('budgetDeferred', [])) | set(progress.get('backlogDeferred', [])) | set(progress.get('failures', {})))
     return {'resume': resume, 'remaining': len(remaining),
             'state': 'complete' if index.get('status') == 'ok' else 'budget' if resume else 'blocked'}
 
@@ -391,10 +407,11 @@ def main(argv=None):
     parser.add_argument('--config', type=Path, default=Path('automation/derivatives/warrant-branches.json'))
     parser.add_argument('--budget-seconds', type=int, default=900)
     parser.add_argument('--allow-budget-continuation', action='store_true')
+    parser.add_argument('--continue-budget-batch', action='store_true', help='Do not retry items already failed in this workflow')
     args = parser.parse_args(argv)
     if not 60 <= args.budget_seconds <= 900:
         parser.error('--budget-seconds must be between 60 and 900')
-    remaining = collect(args.output, read(args.config), budget_seconds=args.budget_seconds, calendar_fetcher=fetch_json)
+    remaining = collect(args.output, read(args.config), budget_seconds=args.budget_seconds, calendar_fetcher=fetch_json, continuation=args.continue_budget_batch)
     index = read(args.output/'warrant-branches.json')
     result = batch_result(index)
     result['resume'] = result['resume'] and args.allow_budget_continuation

@@ -13,13 +13,13 @@
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
-      "bytes": 2711,
-      "sha256": "bde34d7d8c6795d9f6f3103b0011c2141d18b726d685f45e26be3ced362d2dbb"
+      "bytes": 2973,
+      "sha256": "9da2c0f562eaef8ae9c1c18dae4feeffd09b2c285523c0e93ae5281d71dde07c"
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
-      "bytes": 1356,
-      "sha256": "c85971ee521dcb5a0c339cfff5e167acb08223449327b94d38f7bc0fbf18d0fc"
+      "bytes": 1426,
+      "sha256": "bdf9875aa487925c4260ed38243d44eb7b7a0abea7116aaa00cc0d15acf20c7a"
     },
     {
       "path": ".gitignore",
@@ -33,8 +33,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5523,
-      "sha256": "b405065210046a3641d5846d38a8309054dcfe44185d4b35ad267e8931e8a659"
+      "bytes": 5718,
+      "sha256": "c1ed8765de96c37d95da47b1fb76370ed9e50fd7310e0806cfa6ed093c687694"
     },
     {
       "path": "assets/app.mjs",
@@ -163,8 +163,8 @@
     },
     {
       "path": "automation/derivatives/warrant_branches.py",
-      "bytes": 22594,
-      "sha256": "a5cc24f658c753c14f8841429a96a1a6bf01b5ac78357a6985198f7c0b4b4c4a"
+      "bytes": 23793,
+      "sha256": "8001ffd2d1c4cd30b66c661a45e74cc68a8460e939d1d29dc99d2c79f6ef3213"
     },
     {
       "path": "automation/derivatives/warrant_catalog.py",

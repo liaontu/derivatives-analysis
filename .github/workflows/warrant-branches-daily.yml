@@ -27,10 +27,14 @@ jobs:
     needs: update
     if: needs.update.outputs.resume == 'true'
     uses: ./.github/workflows/warrant-branches-batch.yml
+    with:
+      continuation: true
   continue_2:
     needs: continue_1
     if: needs.continue_1.outputs.resume == 'true'
     uses: ./.github/workflows/warrant-branches-batch.yml
+    with:
+      continuation: true
   report_budget_limit:
     needs: continue_2
     if: needs.continue_2.outputs.resume == 'true'

@@ -8,9 +8,12 @@ on:
       budget_seconds:
         type: number
         default: 900
+      continuation:
+        type: boolean
+        default: false
     outputs:
       resume:
-        description: 'A productive batch paused only because of its time budget'
+        description: 'A productive batch has unattempted budget or backlog items'
         value: ${{ jobs.update.outputs.resume }}
 permissions:
   actions: read
@@ -41,7 +44,13 @@ jobs:
         continue-on-error: true
         env:
           BUDGET_SECONDS: ${{ inputs.budget_seconds }}
-        run: python automation/derivatives/warrant_branches.py --allow-budget-continuation --budget-seconds "$BUDGET_SECONDS"
+          CONTINUATION: ${{ inputs.continuation }}
+        run: |
+          args=(--allow-budget-continuation --budget-seconds "$BUDGET_SECONDS")
+          if [ "$CONTINUATION" = true ]; then
+            args+=(--continue-budget-batch)
+          fi
+          python automation/derivatives/warrant_branches.py "${args[@]}"
       # Save each batch before another runner reads its remaining/completed records.
       - name: Commit rankings and source status
         id: commit
