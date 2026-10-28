@@ -18,8 +18,8 @@
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
-      "bytes": 1331,
-      "sha256": "de0643e193d1c71c7ddeb027c2b33a1c916a216eaa4eeb4fcbd045c145fc92a9"
+      "bytes": 1356,
+      "sha256": "c85971ee521dcb5a0c339cfff5e167acb08223449327b94d38f7bc0fbf18d0fc"
     },
     {
       "path": ".gitignore",

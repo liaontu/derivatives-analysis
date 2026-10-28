@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/warrant-branches-batch.yml
     with:
       check_gate: true
-      budget_seconds: ${{ inputs.initial_budget_seconds || 900 }}
+      budget_seconds: ${{ fromJSON(format('{0}', inputs.initial_budget_seconds || 900)) }}
   continue_1:
     needs: update
     if: needs.update.outputs.resume == 'true'
