@@ -138,8 +138,8 @@
     },
     {
       "path": "automation/derivatives/schedule_health.py",
-      "bytes": 4810,
-      "sha256": "a29d2d58ae9a21cc2cfe970a5d0c3449da0d2acb5f1355562ab0403e430f1ad3"
+      "bytes": 10287,
+      "sha256": "5ea8a47fd59e8c4433d0e0fc75f0f9f3b453796357e177cf4c408ea60d342b37"
     },
     {
       "path": "automation/derivatives/taiwan-calendar.json",
