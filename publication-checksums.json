@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 3173,
-      "sha256": "89e9e632bf410393a66d8d5c5c4e4ed3cc73a4903183ab4cd3c49f1f4e9766f5"
+      "bytes": 3474,
+      "sha256": "88648c20db6d017df9dad28b6526b689c9839e0aaa3f488205c36f08b9f2a6f5"
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
@@ -43,8 +43,8 @@
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 48440,
-      "sha256": "75cd3d034db68fedc1bade988fe310f024d4e729bc54f82640c061fb4e745996"
+      "bytes": 49293,
+      "sha256": "1abff4a7117418c6ce724615eba6c2e07acb1405ac57e9f66684fc9a9e7485d6"
     },
     {
       "path": "assets/branches.mjs",
@@ -57,9 +57,14 @@
       "sha256": "611cb654adbf48e4c683e6e648a1ff3bc1ee5cd9955aa39e0ffd70a8d00a2713"
     },
     {
+      "path": "assets/daily-reports.mjs",
+      "bytes": 14845,
+      "sha256": "85cc5de4dbf74add7b704dc147316eda15278a55e3a0e2c7070683114132ae59"
+    },
+    {
       "path": "assets/daily-table.mjs",
-      "bytes": 19895,
-      "sha256": "1990143155a0be780d98d2f71381b35072a0115d9fcc15da63da1577fed55156"
+      "bytes": 20000,
+      "sha256": "8a8d141276a3ea3e0079b47c1349f5afd145f5f822358cdc03117cf645315cc8"
     },
     {
       "path": "assets/directory.mjs",
@@ -103,8 +108,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 17752,
-      "sha256": "7c1a9a2c156e3271e9d2b298d0cde50795c64de70214844aff75576f64546a3b"
+      "bytes": 18563,
+      "sha256": "93996ce28c3aad5188500b00841ddebf14f11784f0d30be9c9cca3718b82e5de"
     },
     {
       "path": "assets/trading-calendar.mjs",
@@ -150,6 +155,11 @@
       "path": "automation/derivatives/collect.py",
       "bytes": 25457,
       "sha256": "c8bbfe62ebca1edbf29464d2f0d3288c8a4e9cadb2f84611eda7833450aa0cfe"
+    },
+    {
+      "path": "automation/derivatives/daily_reports.py",
+      "bytes": 8391,
+      "sha256": "51137ae77f11673dac31255476e1e4c5f4f3f303472954e201ac00c67e40736b"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
@@ -238,8 +248,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3277,
-      "sha256": "b6feabbfe595412d1960a54ac962982588df13053214873f47b3522c451f8c33"
+      "bytes": 3481,
+      "sha256": "206d8ae2267c45e4e61fb58bbdaca6e9f9b8ca3a8800b5b4d32614bc76eccb88"
     }
   ]
 }

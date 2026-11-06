@@ -45,9 +45,14 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/stock_options.py
+      - name: Archive warrant volume and futures/options positioning reports
+        id: reports
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/daily_reports.py
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.stock_options.outcome }}
+        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.stock_options.outcome }} ${{ steps.reports.outcome }}
       - name: Commit data and source status
         id: commit
         run: |
@@ -70,5 +75,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.stock_options.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure'
         run: exit 1
