@@ -1,4 +1,5 @@
 import { finite, fmt, esc, cpLabel, warrantCp, warrantStyle, warrantSortLabels, warrantUnderlyings, resolveWarrantUnderlying, taipeiToday, daysUntil, filterWarrants, oiDistribution, previousOi, toCSV, isStaleSource, setTradingCalendar, taiwanTradingAge } from './model.mjs';
+import { createDirectory } from './directory.mjs';
 import { createUSPages } from './us.mjs';
 import { loadWarrants } from './catalog.mjs';
 import { createWarrantBranches } from './branches.mjs';
@@ -18,6 +19,7 @@ const pages = {
   futures: ['期貨籌碼追蹤', '法人多空部位、大額交易人與期貨商成交熱度。'],
   options: ['選擇權籌碼追蹤', '從買賣權部位、履約價與 Put/Call 比，觀察市場結構。'],
   warrants: ['權證行情篩選', '按個股查看權證，依到期日與履約價排序，分辨歐式及美式履約方式。'],
+  'warrant-directory': ['個股權證發行與分點', '按個股查找權證發行條款，區分實際收錄的分點排行與尚缺的資料。'],
   'warrant-branches': ['權證分點排行', '富邦買超／賣超分點排行，每日更新；非全部分點。'],
   'daily-watch': ['每日變動觀察', '權證價格、標的股價與分點排行，逐日對照變化。'],
   'warrant-daily': ['個股權證每日觀察表', '同一標的的權證漲跌、量變、價差與資料完整度，一次對照。'],
@@ -42,6 +44,7 @@ const unique = (rows, key) => [...new Set(rows.map(r => r[key]).filter(Boolean))
 const choose = (values, desired) => values.includes(desired) ? desired : values[0];
 const us = createUSPages({ load, state, select, choose, unique, table, tr, dateTag, signed, metric, lineChart, empty });
 
+const directory = createDirectory({load,table,tr,empty});
 const branches = createWarrantBranches({ load, table, tr, select, dateTag, signed, metric, empty });
 const dailyWatch = createDailyWatch({ load, table, tr, select, metric, dateTag, empty });
 const warrantDaily = createWarrantDaily({ load, table, tr, select, metric, empty });
@@ -159,7 +162,7 @@ async function warrants() {
   return `<section class="panel">
     <div class="panel-head"><div><span class="eyebrow">WARRANTS BY UNDERLYING</span><h2>依個股查看全部權證</h2><p class="muted">以標的代碼精確分組，包含認購、認售與無成交權證；只顯示權證。</p></div></div>
     <div class="filters compact"><label class="search">標的個股代碼或名稱<input id="w-underlying" type="search" list="w-underlying-list" value="${esc(selected?.label || underlying)}" placeholder="例如 2330、台積電，或從建議清單選取" aria-describedby="w-underlying-error"></label><datalist id="w-underlying-list">${warrantChoices.map(r => `<option value="${esc(r.label)}"></option>`).join('')}</datalist><button id="w-underlying-apply">查看此標的全部權證</button><button id="w-all-market">回到全部標的</button></div>
-    <p id="w-underlying-error" class="status-bad" role="status"></p><p class="note">「全部權證」會清除其他篩選，包含來源所列已到期或停止交易的權證；可再勾選下方排除條件。行情清單不受分點排行前 300 檔限制。</p>
+    <p><a class="text-link" href="#warrant-directory${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">個股權證發行詳情與分點覆蓋 →</a></p><p id="w-underlying-error" class="status-bad" role="status"></p><p class="note">「全部權證」會清除其他篩選，包含來源所列已到期或停止交易的權證；可再勾選下方排除條件。行情清單不受分點排行前 300 檔限制。</p>
   </section>
   <section class="panel"><div class="filters"><label class="search">搜尋代碼、名稱、標的或發行商關鍵字<input id="w-search" type="search" value="${esc(f.search || '')}" placeholder="例如 元大、認購權證代碼"></label>${select('w-market', '市場', ['', 'TWSE', 'TPEX'], f.market || '', v => ({ '': '上市＋上櫃', TWSE: '上市', TPEX: '上櫃' }[v]))}${select('w-cp', '權別', ['', 'C', 'P'], f.cp || '', v => v ? warrantCp(v) : '全部')}${select('w-style', '履約方式', ['', '歐式', '美式', 'unknown'], f.style || '', v => ({ '': '全部履約方式', unknown: '未提供／未識別' }[v] || v))}<label>最低成交量（張）<input id="w-volume" type="number" min="0" step="any" value="${esc(f.minVolume || '')}" placeholder="不限，含無成交"></label><label>至少剩餘天數<input id="w-days" type="number" min="0" step="1" value="${esc(f.minDays || '')}" placeholder="不限"></label><label>最高收盤價（元）<input id="w-price" type="number" min="0" step="0.01" value="${esc(f.maxPrice || '')}" placeholder="不限"></label>${select('w-sort', '排序', Object.keys(warrantSortLabels), f.sort, v => warrantSortLabels[v])}<label class="check"><input id="w-active" type="checkbox" ${f.active ? 'checked' : ''}> 排除已到期／已過最後交易日</label><button id="w-apply">套用篩選</button><button id="w-reset">重設篩選</button></div><p class="muted">${underlying ? `目前限定標的：${esc(selected?.label || underlying)}。` : ''}成交量預設不限，包含零成交及成交量缺值；「—」表示缺值。1 張＝1,000 單位。</p></section>
   <section class="panel"><p><a class="text-link" href="#warrant-daily${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">查看個股權證每日觀察表 →</a></p><a class="text-link" href="#warrant-spreads${underlying ? `?underlying=${encodeURIComponent(underlying)}` : ''}">查看同標的權證價差異常與訊號回測 →</a></section><section class="panel source-list warrant-rules"><h2>歐式／美式履約規則</h2><p><strong>歐式</strong>：僅到期日可申請履約。<strong>美式</strong>：可在權證約定的履約期間內申請履約。這是申請履約時點的區別；市場買賣與最後交易日另依條款。</p><p class="note">到期日排序採官方的履約截止日（上市）或到期日（上櫃），與最後交易日分開顯示；實際申請時間、結算方式依發行條款及券商規定。<a href="https://www.twse.com.tw/zh/products/securities/warrant/educate/qa.html" target="_blank" rel="noopener noreferrer">證交所履約說明 ↗</a></p></section>
@@ -174,6 +177,7 @@ async function sources() {
 
 function bind(kind) {
   const rerender = () => render();
+  if (kind === 'warrant-directory') { directory.bind(rerender); return; }
   if (kind === 'daily-watch') { dailyWatch.bind(rerender); return; }
   if (kind === 'warrant-daily') { warrantDaily.bind(rerender); return; }
   if (kind === 'warrant-lab') { warrantLab.bind(rerender); return; }
@@ -237,7 +241,7 @@ async function render() {
       try { const response = await fetch('automation/derivatives/taiwan-calendar.json', {cache:'no-cache'}); if (!response.ok) throw Error('CALENDAR_UNAVAILABLE'); setTradingCalendar(await response.json()); }
       catch { setTradingCalendar(null); }
     }
-    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
+    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
     const old = scope.filter(s => isStaleSource(s));
     const calendarUnknown = scope.some(s => s.region === 'TW' && s.date && taiwanTradingAge(s.date) === null);
     const calendarNotice = calendarUnknown ? '交易日曆未驗證或年份未涵蓋，無法判斷台灣資料新鮮度。' : manifest.calendarStatus?.status === 'retained' ? '交易日曆更新失敗，使用上次核實版本。' : '';
@@ -245,8 +249,8 @@ async function render() {
     $('#notice').classList.toggle('warning', !!(failed.length || old.length || calendarNotice));
     $('#notice').innerHTML = failed.length || old.length || calendarNotice ? `${calendarNotice}${failed.length ? `${failed.length} 個來源更新異常。` : ''}${old.length ? `${old.length} 個來源資料較舊（台灣資料超過 4 個交易日／美國日資料超過 4 個日曆天／週報超過 14 個日曆天）。` : ''} 已保留最近成功值。<a href="#sources">查看資料狀態</a>` : `官方資料已載入。日資料與 CFTC 週報依原始頻率呈現；各表分別標示資料日期。`;
     if (route === 'warrant-branches') { $('#notice').textContent = `${calendarNotice}富邦證券公開排行／嘉實資訊 · 非全部分點 · 預定台北 20:13、22:13、23:13 檢查`; $('#notice').classList.toggle('warning', !!calendarNotice); }
-    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
-    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
+    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
     if (token !== generation) return;
     $('#content').innerHTML = html;
     bind(route);

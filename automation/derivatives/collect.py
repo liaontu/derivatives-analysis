@@ -171,7 +171,8 @@ def normalize(name, raw):
         return [{"date": day, "code": str(r[0]).strip(), "name": r[1], "price": number(r[2]),
                  "underlyingPrice": number(r[6]),
                  "underlying": str(r[4]).strip(), "underlyingName": r[5], "cp": cp(r[8]),
-                 "style": r[9], "lastTrade": iso_date(r[12]), "expiry": iso_date(r[13]),
+                 "style": r[9], "listedDate": iso_date(r[10]), "exerciseStart": iso_date(r[11]),
+                 "lastTrade": iso_date(r[12]), "expiry": iso_date(r[13]),
                  "ratio": number(r[14]), "strike": number(r[15]), "market": "TWSE"}
                 for r in raw.get("data", []) if len(r) >= 16]
     if not isinstance(raw, list) or not raw or not all(isinstance(r, dict) for r in raw):
@@ -210,7 +211,11 @@ def normalize(name, raw):
             out.update(code=r.get("Code"), name=r.get("Name"), underlying=r.get("UnderlyingStockCode"),
                        underlyingName=r.get("UnderlyingStock"), cp=cp(r.get("Type")), style=r.get("American/European"),
                        expiry=iso_date(r.get("ExpiryDate")), ratio=number(r.get("Latest ExerciseRatio", r.get("ExerciseRatio"))),
-                       strike=number(r.get("LatestExercisePrice")), market="TPEX")
+                       strike=number(r.get("LatestExercisePrice")), market="TPEX",
+                       listedDate=iso_date(r.get("ListedDate")), initialIssueK=number(r.get("InitialIssuance")),
+                       addedK=number(r.get("Accum.Accum.Issuance")), cancelledK=number(r.get("Accum.CanceledWarrant")),
+                       cap=number(r.get("CapPrice/Index")), floor=number(r.get("FloorPrice/Index")),
+                       reset=r.get("Reset"))
         elif name == "tpex-warrants":
             units = number(r.get("TradeVol.", r.get("TradeVol")))
             out.update(code=r.get("Code"), name=r.get("Name"), price=number(r.get("Close")),
@@ -315,17 +320,19 @@ def update_feed(name, old, raw, now, today, calendar=None):
 
 
 def combine_warrants(feeds):
+    # The directory loads these from the source snapshots; keep the bulk quote download compact.
+    detail_keys = {'listedDate', 'exerciseStart', 'initialIssueK', 'addedK', 'cancelledK', 'cap', 'floor', 'reset'}
     volumes = {r["code"]: r for name in ("twse-volume", "twse-volume-put") for r in feeds.get(name, {}).get("rows", [])}
     terms = {r["code"]: r for r in feeds.get("tpex-terms", {}).get("rows", [])}
     result = []
     for row in feeds.get("twse-warrants", {}).get("rows", []):
         v = volumes.get(row["code"], {})
         same_day = v.get("date") == row["date"]
-        result.append({**row, "volume": v.get("volume") if same_day else None,
+        result.append({**{k: x for k, x in row.items() if k not in detail_keys}, "volume": v.get("volume") if same_day else None,
                        "value": v.get("value") if same_day else None, "termsDate": row["date"]})
     for row in feeds.get("tpex-warrants", {}).get("rows", []):
         t = terms.get(row["code"], {})
-        result.append({**t, **row, "termsDate": t.get("date")})
+        result.append({**{k: x for k, x in t.items() if k not in detail_keys}, **row, "termsDate": t.get("date")})
     return result
 
 

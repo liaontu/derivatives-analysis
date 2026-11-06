@@ -35,6 +35,11 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/collect.py
+      - name: Refresh individual-stock warrant issuance directory
+        id: directory
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_directory.py
       # The collector leaves unchanged files byte-identical, so an empty diff means nothing to publish.
       - name: Commit data and source status
         id: commit
@@ -58,5 +63,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure'
         run: exit 1

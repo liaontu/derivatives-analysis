@@ -52,12 +52,21 @@ jobs:
           fi
           python automation/derivatives/warrant_branches.py "${args[@]}"
       # Save each batch before another runner reads its remaining/completed records.
+      - name: Update individual-stock ranking coverage
+        id: coverage
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          if [ -f data/derivatives/stock-warrant-directory.json ]; then
+            python automation/derivatives/warrant_directory.py --coverage-only
+          fi
       - name: Commit rankings and source status
         id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/derivatives/warrant-branches*
+          if [ -f data/derivatives/stock-warrant-coverage.json ]; then git add data/derivatives/stock-warrant-coverage.json; fi
           if [ -f data/derivatives/trading-calendar.json ]; then
             git add data/derivatives/trading-calendar.json
           fi
@@ -76,5 +85,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure'
         run: exit 1
