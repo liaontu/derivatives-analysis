@@ -40,9 +40,14 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_directory.py
+      - name: Match Taiwan individual-stock options to same-day spot prices
+        id: stock_options
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/stock_options.py
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }}
+        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.stock_options.outcome }}
       - name: Commit data and source status
         id: commit
         run: |
@@ -65,5 +70,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.stock_options.outcome == 'failure'
         run: exit 1

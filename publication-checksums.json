@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 2855,
-      "sha256": "7fdb0dba2874f3c0a08967a559183ab0945c433dc1062d64330679f527205cd3"
+      "bytes": 3173,
+      "sha256": "89e9e632bf410393a66d8d5c5c4e4ed3cc73a4903183ab4cd3c49f1f4e9766f5"
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
@@ -43,8 +43,8 @@
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 46605,
-      "sha256": "684827bf2f24987ee1b0cace78535ea541e18f7a356af0219ff80bc04abb708b"
+      "bytes": 47166,
+      "sha256": "219ab976d33280dc7df99248b2f2388593e32e8ac5acce26defa5a7ceb49f011"
     },
     {
       "path": "assets/branches.mjs",
@@ -95,6 +95,11 @@
       "path": "assets/spreads.mjs",
       "bytes": 22833,
       "sha256": "afd826c76d2eb34bad901eda71c245feff7e6b77e32a19938e175cdb85adb44f"
+    },
+    {
+      "path": "assets/stock-options.mjs",
+      "bytes": 9044,
+      "sha256": "6e12cd4a111ab00dad976f300ef40fba96712ec1976c3f3a94ef997dffb592d0"
     },
     {
       "path": "assets/styles.css",
@@ -167,6 +172,11 @@
       "sha256": "5ea8a47fd59e8c4433d0e0fc75f0f9f3b453796357e177cf4c408ea60d342b37"
     },
     {
+      "path": "automation/derivatives/stock_options.py",
+      "bytes": 6201,
+      "sha256": "9a3713c7b0a8c066a8447261a0d55cf24a10d3773bd8f51c4aa1cf6ae5a6cf92"
+    },
+    {
       "path": "automation/derivatives/taiwan-calendar.json",
       "bytes": 2208,
       "sha256": "90ed8ea3e0178a4666105c3add1ab4245ae3b63b15a2bd1587acba721a09acfb"
@@ -228,8 +238,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3176,
-      "sha256": "73c04a5dd53e410e6f5e8d2560ef80f4766cab6e5a9c36c692652d564786f016"
+      "bytes": 3277,
+      "sha256": "b6feabbfe595412d1960a54ac962982588df13053214873f47b3522c451f8c33"
     }
   ]
 }

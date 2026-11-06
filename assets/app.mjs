@@ -1,5 +1,6 @@
 import { finite, fmt, esc, priceStatus, taipeiTime, cpLabel, warrantCp, warrantStyle, warrantSortLabels, warrantUnderlyings, resolveWarrantUnderlying, taipeiToday, daysUntil, filterWarrants, oiDistribution, previousOi, toCSV, isStaleSource, setTradingCalendar, taiwanTradingAge } from './model.mjs';
 import { createDirectory } from './directory.mjs';
+import { createStockOptions } from './stock-options.mjs';
 import { createUSPages } from './us.mjs';
 import { loadWarrants } from './catalog.mjs';
 import { createWarrantBranches } from './branches.mjs';
@@ -18,6 +19,7 @@ const pages = {
   overview: ['市場總覽', '把行情、部位與交易熱度，放在同一個視野。'],
   futures: ['期貨籌碼追蹤', '法人多空部位、大額交易人與期貨商成交熱度。'],
   options: ['選擇權籌碼追蹤', '從買賣權部位、履約價與 Put/Call 比，觀察市場結構。'],
+  'stock-options': ['個股選擇權與現股價差', '比較同日現股、買權與賣權，追蹤價差變化及盤末報價涵蓋。'],
   warrants: ['權證行情篩選', '按個股查看權證，依到期日與履約價排序，分辨歐式及美式履約方式。'],
   'warrant-directory': ['個股權證發行與分點', '按個股查找權證發行條款，區分實際收錄的分點排行與尚缺的資料。'],
   'warrant-branches': ['權證分點排行', '富邦買超／賣超分點排行，每日更新；非全部分點。'],
@@ -51,6 +53,7 @@ const warrantDaily = createWarrantDaily({ load, table, tr, select, metric, empty
 const focusWatch = createFocusWatch({ load, table, tr, select, metric, empty });
 const warrantLab = createWarrantLab({ load, table, tr, select, metric, empty });
 const spreadWatch = createSpreadWatch({ load, table, tr, select, metric, dateTag, empty });
+const stockOptions = createStockOptions({ load, table, tr, select, metric });
 
 async function load(name) {
   if (!cache.has(name)) cache.set(name, (async () => {
@@ -136,6 +139,7 @@ async function positioning(kind) {
   <section class="panel"><div class="panel-head"><h2>${esc(state[kind + 'Inst'])}・外資${isOption ? '買權' : ''}淨未平倉趨勢</h2>${dateTag(inst.date)}</div>${lineChart(points, '外資淨未平倉口數趨勢')}</section>
   <section class="panel"><div class="panel-head"><div><span class="eyebrow">LARGE TRADERS</span><h2>前五大／前十大交易人部位</h2></div>${dateTag(large.date)}</div><div class="filters compact">${select('large-contract', '契約', largeContracts, state[kind + 'Large'], c => `${c} · ${large.rows.find(r => r.contract === c)?.name || ''}`)}${select('large-month', '月份 / 統計範圍', largeMonths, state[kind + 'Month'], monthName)}</div>${table(['類別' + (isOption ? ' / 權別' : ''), '前五大買方', '前五大賣方', '前十大買方', '前十大賣方', '全市場未平倉'], largeRows.map(r => tr([`${r.traderType === '0' ? '全部大額交易人' : r.traderType === '1' ? '其中：特定法人' : esc(r.traderType)}${isOption ? `<small>${cpLabel(r.cp)}</small>` : ''}`, fmt(r.top5Buy), fmt(r.top5Sell), fmt(r.top10Buy), fmt(r.top10Sell), fmt(r.oi)])))}<p class="note">單位：口。特定法人是大額交易人中的子集合，不能相加。不同月份的排行也不能相加推算所有契約排行。${isOption ? '' : '臺股期貨合計口徑包含依規模折算的小型、微型契約，依期交所說明。'}</p></section>`;
   if (isOption) {
+    html = '<p><a class="text-link" href="#stock-options">查看個股選擇權與現股每日價差 →</a></p>' + html;
     const ratio = pcr.rows[0];
     html += `<div class="metrics">${metric('P/C 未平倉比', finite(ratio?.oiRatio) ? fmt(ratio.oiRatio, 2) + '%' : '—', `${pcr.date || '—'} · 臺指全契約`, 'teal')}${metric('P/C 成交量比', finite(ratio?.volumeRatio) ? fmt(ratio.volumeRatio, 2) + '%' : '—', `${pcr.date || '—'} · 臺指全契約`)}${metric('買權未平倉', fmt(ratio?.callOi), '口 · 臺指全契約')}${metric('賣權未平倉', fmt(ratio?.putOi), '口 · 臺指全契約')}</div>`;
   }
@@ -206,6 +210,7 @@ async function sources() {
 
 function bind(kind) {
   const rerender = () => render();
+  if (kind === 'stock-options') { stockOptions.bind(rerender); return; }
   if (kind === 'warrant-directory') { directory.bind(rerender); return; }
   if (kind === 'daily-watch') { dailyWatch.bind(rerender); return; }
   if (kind === 'warrant-daily') { warrantDaily.bind(rerender); return; }
@@ -270,7 +275,7 @@ async function render() {
       try { const response = await fetch('automation/derivatives/taiwan-calendar.json', {cache:'no-cache'}); if (!response.ok) throw Error('CALENDAR_UNAVAILABLE'); setTradingCalendar(await response.json()); }
       catch { setTradingCalendar(null); }
     }
-    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
+    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'stock-options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
     const old = scope.filter(s => isStaleSource(s));
     const calendarUnknown = scope.some(s => s.region === 'TW' && s.date && taiwanTradingAge(s.date) === null);
     const calendarNotice = calendarUnknown ? '交易日曆未驗證或年份未涵蓋，無法判斷台灣資料新鮮度。' : manifest.calendarStatus?.status === 'retained' ? '交易日曆更新失敗，使用上次核實版本。' : '';
@@ -278,8 +283,8 @@ async function render() {
     $('#notice').classList.toggle('warning', !!(failed.length || old.length || calendarNotice));
     $('#notice').innerHTML = failed.length || old.length || calendarNotice ? `${calendarNotice}${failed.length ? `${failed.length} 個來源更新異常。` : ''}${old.length ? `${old.length} 個來源資料較舊（台灣資料超過 4 個交易日／美國日資料超過 4 個日曆天／週報超過 14 個日曆天）。` : ''} 已保留最近成功值。<a href="#sources">查看資料狀態</a>` : `官方資料已載入。日資料與 CFTC 週報依原始頻率呈現；各表分別標示資料日期。`;
     if (route === 'warrant-branches') { const check = await load('check-branches').catch(() => null); if (token !== generation) return; $('#notice').textContent = `${calendarNotice}富邦證券公開排行／嘉實資訊 · 非全部分點 · 最近檢查（台北）：${checkLabel(check)}`; $('#notice').classList.toggle('warning', !!calendarNotice); }
-    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
-    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'stock-options', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
+    const html = route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : route === 'stock-options' ? await stockOptions.page() : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
     if (token !== generation) return;
     $('#content').innerHTML = html;
     bind(route);
