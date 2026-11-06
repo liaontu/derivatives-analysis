@@ -98,8 +98,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 14486,
-      "sha256": "03d4201a6fec85845cdcdd59035c6c0cb96a87227259f982bdaebb137216ecbe"
+      "bytes": 17308,
+      "sha256": "ce19ef8ab7bde519c9be22c2b9fa72030978fc1cbdf64cf258bcea9cf9997059"
     },
     {
       "path": "assets/trading-calendar.mjs",
