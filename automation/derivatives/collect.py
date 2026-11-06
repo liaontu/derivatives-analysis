@@ -21,7 +21,7 @@ try:
     from .publication import WRITTEN
     from .warrant_catalog import publish_catalog
     from .us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
-    from .warrant_history import archive
+    from .warrant_history import archive, trade_price
     from .warrant_spreads import collect_spreads
     from .warrant_focus import collect_focus
     from .warrant_lab import collect_lab
@@ -32,7 +32,7 @@ except ImportError:  # Direct execution by the scheduled workflow.
     from publication import WRITTEN
     from warrant_catalog import publish_catalog
     from us_sources import US_FEEDS, COT_DATASETS, cot_url, options_document, settlement_document, normalize_us
-    from warrant_history import archive
+    from warrant_history import archive, trade_price
     from warrant_spreads import collect_spreads
     from warrant_focus import collect_focus
     from warrant_lab import collect_lab
@@ -333,6 +333,10 @@ def combine_warrants(feeds):
     for row in feeds.get("tpex-warrants", {}).get("rows", []):
         t = terms.get(row["code"], {})
         result.append({**{k: x for k, x in t.items() if k not in detail_keys}, **row, "termsDate": t.get("date")})
+    for row in result:
+        row['price'] = trade_price(row.get('price'), row.get('volume'))
+        if row['price'] is None:
+            row['priceStatus'] = 'no_trade' if row.get('volume') == 0 else 'volume_unknown' if row.get('volume') is None else 'close_missing'
     return result
 
 
@@ -386,8 +390,8 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
             print(json.dumps({"feed": name, "date": stored["date"], "status": status, "count": len(stored["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
     save(output / "warrants.json", {"rows": warrants})
-    publish_catalog(output, warrants, save)
     archive(output, warrants, feeds, now, today, read, save)
+    publish_catalog(output, warrants, save, read)
     try:
         collect_spreads(output, warrants, feeds, now, today, read, save)
     except Exception as exc:

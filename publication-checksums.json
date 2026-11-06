@@ -7,14 +7,19 @@
       "sha256": "320bc86592731ed6959d6a20115dee8a86bd4353464aa15c69edd2c0a4d9de00"
     },
     {
+      "path": ".github/workflows/derivatives-backup-clock.yml",
+      "bytes": 632,
+      "sha256": "68bd1eb3db3786fc09f195dd4d40430584bcfc96aca9594af077d0f49badd299"
+    },
+    {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 2707,
-      "sha256": "195a3a9136adc0a64cdf3b08fb7a2a536dd34bb36d41d35e70c54b154b3f0e5b"
+      "bytes": 2855,
+      "sha256": "7fdb0dba2874f3c0a08967a559183ab0945c433dc1062d64330679f527205cd3"
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
-      "bytes": 3512,
-      "sha256": "e988e189b713cc8bf6f28e5dabf46b57b2e16c754694fe7cbc5807d62afb61a9"
+      "bytes": 3878,
+      "sha256": "fe9bee878462c95ec288b620b158802bd637599098346f60934d4d88e845deff"
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
@@ -33,28 +38,28 @@
     },
     {
       "path": "README.md",
-      "bytes": 5972,
-      "sha256": "53fcc8cc29c36242cba31da1aba58269461fa5fd6b4d42856a37b3a72529e4af"
+      "bytes": 6225,
+      "sha256": "2c90981042c088dbb93008be9e9b44aa5c6cfc9a39a6e074eb5835c3b1f0efa4"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 42246,
-      "sha256": "66e4ef3338dd8a5fc3ef38fd41ffb58d2d3186b4e90b83ef60a51db9634dc59d"
+      "bytes": 46605,
+      "sha256": "684827bf2f24987ee1b0cace78535ea541e18f7a356af0219ff80bc04abb708b"
     },
     {
       "path": "assets/branches.mjs",
-      "bytes": 12280,
-      "sha256": "0daab0df25caf70bd9c0dd3ac87d540de9ee4890cd99cd3cad73179f4a013a3c"
+      "bytes": 12498,
+      "sha256": "3094dc51bcc495070d33ba5a0d4d4bdbe922f3054e43f992a0c5c226d386ca50"
     },
     {
       "path": "assets/catalog.mjs",
-      "bytes": 897,
-      "sha256": "416bfbfceb6f4ea3a0c1fce828d7b72a6aa1d27a08faa600f2ee895abb13b03d"
+      "bytes": 1118,
+      "sha256": "611cb654adbf48e4c683e6e648a1ff3bc1ee5cd9955aa39e0ffd70a8d00a2713"
     },
     {
       "path": "assets/daily-table.mjs",
-      "bytes": 19173,
-      "sha256": "5693410c1cfafd3001255f5255eba87bec361a4f6051f26079be045233738865"
+      "bytes": 19895,
+      "sha256": "1990143155a0be780d98d2f71381b35072a0115d9fcc15da63da1577fed55156"
     },
     {
       "path": "assets/directory.mjs",
@@ -63,8 +68,8 @@
     },
     {
       "path": "assets/focus.mjs",
-      "bytes": 14823,
-      "sha256": "3d0e02bd511e1fe2e1ed509a38a457dbdc435f5fde14766592b33df36970fc54"
+      "bytes": 14768,
+      "sha256": "d4701317095b81dbfd317bfd02a45af4a10ad05ab3df3a8e81721f38a6866e26"
     },
     {
       "path": "assets/governance.mjs",
@@ -83,13 +88,13 @@
     },
     {
       "path": "assets/model.mjs",
-      "bytes": 5972,
-      "sha256": "ac8a8a45731f9ef82a388bd6355491f0bac67fe30f555d22aab1b190921ee075"
+      "bytes": 6601,
+      "sha256": "39f7324c8b731ec0c96fc156a43e76c53a079147820a26971cb8ff5dece0a693"
     },
     {
       "path": "assets/spreads.mjs",
-      "bytes": 22853,
-      "sha256": "428ec2c8f539e7589fc457a75e0fd9a4610a7246286d389d236d30363d646c89"
+      "bytes": 22833,
+      "sha256": "afd826c76d2eb34bad901eda71c245feff7e6b77e32a19938e175cdb85adb44f"
     },
     {
       "path": "assets/styles.css",
@@ -103,13 +108,13 @@
     },
     {
       "path": "assets/us.mjs",
-      "bytes": 11265,
-      "sha256": "ea3418a08a3949a9827be187ed749b4fff940dc34606ab12f45fcf6dcec565f6"
+      "bytes": 11271,
+      "sha256": "b6a54ae81cbb6d431452507535e579e0f59a26f8f78cedac8693507e82622357"
     },
     {
       "path": "assets/watch.mjs",
-      "bytes": 17917,
-      "sha256": "b142d8b01e9a52d228c61b4756dce59e4ef832918db25822e5edd407a1aaa740"
+      "bytes": 18574,
+      "sha256": "239a939fc1beb800946bbd1b155a94e2a58825b1818a0d5845fd1058ecc87fbf"
     },
     {
       "path": "automation/derivatives/backfill_warrants.py",
@@ -122,9 +127,19 @@
       "sha256": "4368c0cee597e98b9ad7b26df42af7bfe7ddcadee8a8bbe54cca0d04e7e45a1a"
     },
     {
+      "path": "automation/derivatives/check_status.py",
+      "bytes": 1063,
+      "sha256": "fe2981a4d17aa86fd6915302c055ee8e827a7355b277d94cfcbf07d87e5a8784"
+    },
+    {
+      "path": "automation/derivatives/cloud_recovery.py",
+      "bytes": 2014,
+      "sha256": "a2538ccdcfd1517a7bc391033652f06cee46d4d2b70604bc84b6d693bc2297dd"
+    },
+    {
       "path": "automation/derivatives/collect.py",
-      "bytes": 25155,
-      "sha256": "09fd0dd045c8030ba9e41e800239a870df6ab1bfd18787f4720f78d71f27fc0c"
+      "bytes": 25457,
+      "sha256": "c8bbfe62ebca1edbf29464d2f0d3288c8a4e9cadb2f84611eda7833450aa0cfe"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
@@ -173,13 +188,13 @@
     },
     {
       "path": "automation/derivatives/warrant_catalog.py",
-      "bytes": 1032,
-      "sha256": "2e278b1ef729975249fe94cdd4c518e83b32192923c8b0ec5af656fa99094ce4"
+      "bytes": 2500,
+      "sha256": "07d8be6b5d3f2d917b9c3d80eb989ccc67679bfa16b323bb6341a05860cd9aff"
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 9587,
-      "sha256": "85575d9c394f9dd9c4be2e1cad361a831b3f45601c145cd174f15e2fbc84012f"
+      "bytes": 9607,
+      "sha256": "72520710f376392bf75f345bde1838b324ea67a9d621c21f54df8ebda7e78134"
     },
     {
       "path": "automation/derivatives/warrant_focus.py",
@@ -188,8 +203,8 @@
     },
     {
       "path": "automation/derivatives/warrant_history.py",
-      "bytes": 3749,
-      "sha256": "2d2d07f76b9d590aac137887ff9e44bc22ea7a07fcd6f872b892ef18b6786c64"
+      "bytes": 4166,
+      "sha256": "57c686964fb5c727847ce3e8f9b41c62936ede988760faa541b06c6c9df206bd"
     },
     {
       "path": "automation/derivatives/warrant_lab.py",
@@ -208,8 +223,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3182,
-      "sha256": "30610f01c59a83dc02e64d2b40f6c8a8c919421a737f5ecbe21e19841850333f"
+      "bytes": 3176,
+      "sha256": "73c04a5dd53e410e6f5e8d2560ef80f4766cab6e5a9c36c692652d564786f016"
     }
   ]
 }

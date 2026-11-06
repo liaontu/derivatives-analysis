@@ -1,15 +1,16 @@
-import { taiwanFreshnessMessage, esc, fmt, finite, warrantUnderlyings, resolveWarrantUnderlying, warrantCp, warrantStyle, toCSV, daysUntil } from './model.mjs';
+import { taiwanFreshnessMessage, esc, fmt, finite, priceStatus, tradePrice, resolveWarrantUnderlying, warrantCp, warrantStyle, toCSV } from './model.mjs';
 import {loadWarrants} from './catalog.mjs';
 
 export function change(current, previous) {
   const delta = finite(current) && finite(previous) ? current - previous : null;
   return { delta, pct: finite(delta) && previous > 0 ? delta / previous * 100 : null };
 }
-export function quoteComparison(rows, day) {
-  const sorted = [...rows].sort((a, b) => a[0].localeCompare(b[0]));
+export function quoteComparison(rows, day, warrant = true) {
+  const sorted = rows.map(r => warrant ? [r[0], tradePrice(r[1], r[2]), r[2]] : r).sort((a, b) => a[0].localeCompare(b[0]));
   const index = sorted.findIndex(r => r[0] === day);
-  const current = sorted[index], previous = index > 0 ? sorted[index - 1] : null;
-  return { current, previous, ...change(current?.[1], previous?.[1]), volume: change(current?.[2], previous?.[2]) };
+  const current = sorted[index], volumePrevious = index > 0 ? sorted[index - 1] : null;
+  const previous = current ? sorted.slice(0, index).reverse().find(r => finite(r[1]) && r[1] > 0) : null;
+  return { current, previous, volumePrevious, ...change(current?.[1], previous?.[1]), volume: change(current?.[2], volumePrevious?.[2]) };
 }
 export function compareBranches(current, previous) {
   const a = new Map((current?.rows || []).map(r => [r.branchCode, r]));
@@ -68,13 +69,13 @@ export function createDailyWatch({ load, table, tr, select, metric, dateTag, emp
       (async () => { if (index.items.some(i => i.code === selected.underlying)) { try { history = await load(`warrant-history/${selected.underlying}`); } catch { /* Show explicit no-history state. */ } } })(),
       (async () => { if (tracked) { try { rankings = await load(`warrant-branches/${code}`); } catch { rankingError = true; } } })(),
     ]);
-    const rows = history?.quotes?.[code]?.rows || [];
+    const rows = (history?.quotes?.[code]?.rows || []).map(([d, p, v]) => [d, tradePrice(p, v), v]);
     const dates = rows.map(r => r[0]).sort().reverse();
     state.day = dates.includes(state.day) ? state.day : dates[0] || '';
     const q = quoteComparison(rows, state.day);
     const prices = history?.underlyingPrices || [];
     const priceRow = prices.filter(r => r[0] <= state.day).at(-1);
-    const u = quoteComparison(prices, priceRow?.[0]);
+    const u = quoteComparison(prices, priceRow?.[0], false);
     const branchDays = [...(rankings?.history || [])].sort((a, b) => b.date.localeCompare(a.date));
     state.branchDay = branchDays.some(d => d.date === state.branchDay) ? state.branchDay : branchDays[0]?.date || '';
     const dayIndex = branchDays.findIndex(d => d.date === state.branchDay);
@@ -82,21 +83,21 @@ export function createDailyWatch({ load, table, tr, select, metric, dateTag, emp
     const comparisons = compareBranches(day, prev).filter(r => !state.branch || `${r.code} ${r.name}`.toLowerCase().includes(state.branch.toLowerCase()));
     const limit = Number(state.limit);
     csv = rows.filter(r => r[0] <= state.day).slice(-limit).map(r => {
-      const prior = rows[rows.findIndex(d => d[0] === r[0]) - 1];
+      const movement = quoteComparison(rows, r[0]);
       const d = branchDays.find(d => d.date === r[0]);
-      return { code, date: r[0], price: r[1], volume: r[2], priceChange: change(r[1], prior?.[1]).delta, pricePct: change(r[1], prior?.[1]).pct,
+      return { code, date: r[0], price: r[1], volume: r[2], previousDate: movement.previous?.[0], status: priceStatus(r[1], r[2]), priceChange: movement.delta, pricePct: movement.pct,
         underlying: selected.underlying, underlyingPrice: prices.find(p => p[0] === r[0])?.[1], branchDate: d?.date,
         branchCount: d?.rows.length, coverage: '買超／賣超各最多15名，非全部分點' };
     });
-    const comparisonNote = q.previous ? `較 ${q.previous[0]}：${deltaText(q.delta)} 元` : '尚無前筆價格可比較';
-    const selectedTitle = `<section class="panel"><div class="panel-head"><div><span class="eyebrow">${esc(code)} · ${warrantCp(selected.cp)} · ${warrantStyle(selected.style)}</span><h2>${esc(selected.name)}</h2><p class="muted">標的 ${esc(selected.underlying)} · ${esc(selected.underlyingName)}　履約價 ${fmt(selected.strike, 3)}　到期 ${esc(selected.expiry || '—')}</p></div><button id="dw-pin">${pins.includes(code) ? '移除自選觀察' : '＋ 加入自選觀察'}</button></div><div class="filters compact">${select('dw-day', '行情資料日', dates, state.day)}${select('dw-limit', '趨勢與明細範圍', ['5', '20', '60'], state.limit, v => `最近 ${v} 個資料日`)}<button id="dw-export" ${rows.length ? '' : 'disabled'}>匯出每日明細 CSV</button></div><a class="text-link" href="#warrants?underlying=${encodeURIComponent(selected.underlying)}">查看此標的全部權證 →</a> · <a class="text-link" href="#warrant-daily?underlying=${encodeURIComponent(selected.underlying)}">個股權證每日觀察表 →</a> · <a class="text-link" href="#warrant-branches?code=${code}">查看分點原始排行 →</a> · <a class="text-link" href="#warrant-spreads?underlying=${encodeURIComponent(selected.underlying)}">同標的權證價差異常 →</a><p class="note">行情按來源資料日累積，上市資料包含已驗證的歷史補抓，最多 60 個資料日；歷史以來源交易日期記錄，休市或抓取失敗不新增假資料。價格為未還原收盤價；與前一筆已保存資料比較，日期間隔可能跨休市或缺漏日。${taiwanFreshnessMessage(state.day) ? `<span class="status-bad">${esc(taiwanFreshnessMessage(state.day))}</span>` : ''}</p></section>`;
-    const metrics = `<div class="metrics">${metric('權證收盤價', fmt(q.current?.[1], 3), `${state.day || '尚無資料'} · 元`)}${metric('權證漲跌幅', colored(q.pct, '%', 2), comparisonNote)}${metric('標的收盤價／指數', fmt(u.current?.[1], 3), `${u.current?.[0] || '尚無資料'} · 較 ${u.previous?.[0] || '—'} ${deltaText(u.pct, '%', 2)}`)}${metric('權證成交量', fmt(q.current?.[2], 3), `${state.day || '—'} · 張；較前筆 ${deltaText(q.volume.delta)} 張`)}</div>`;
+    const comparisonNote = q.previous ? `前次成交 ${q.previous[0]}${finite(q.delta) ? `：${deltaText(q.delta)} 元` : '；本日無法計算漲跌'}` : '尚無前次成交價可比較';
+    const selectedTitle = `<section class="panel"><div class="panel-head"><div><span class="eyebrow">${esc(code)} · ${warrantCp(selected.cp)} · ${warrantStyle(selected.style)}</span><h2>${esc(selected.name)}</h2><p class="muted">標的 ${esc(selected.underlying)} · ${esc(selected.underlyingName)}　履約價 ${fmt(selected.strike, 3)}　到期 ${esc(selected.expiry || '—')}</p></div><button id="dw-pin">${pins.includes(code) ? '移除自選觀察' : '＋ 加入自選觀察'}</button></div><div class="filters compact">${select('dw-day', '行情資料日', dates, state.day)}${select('dw-limit', '趨勢與明細範圍', ['5', '20', '60'], state.limit, v => `最近 ${v} 個資料日`)}<button id="dw-export" ${rows.length ? '' : 'disabled'}>匯出每日明細 CSV</button></div><a class="text-link" href="#warrants?underlying=${encodeURIComponent(selected.underlying)}">查看此標的全部權證 →</a> · <a class="text-link" href="#warrant-daily?underlying=${encodeURIComponent(selected.underlying)}">個股權證每日觀察表 →</a> · <a class="text-link" href="#warrant-branches?code=${code}">查看分點原始排行 →</a> · <a class="text-link" href="#warrant-spreads?underlying=${encodeURIComponent(selected.underlying)}">同標的權證價差異常 →</a><p class="note">行情按來源資料日累積，上市資料包含已驗證的歷史補抓，最多 60 個資料日；歷史以來源交易日期記錄，休市或抓取失敗不新增假資料。價格為未還原收盤價；價格比較上一個已保存的有成交價日期；無成交或無法確認時不計漲跌，圖線中斷。成交量比較前一筆行情。${taiwanFreshnessMessage(state.day) ? `<span class="status-bad">${esc(taiwanFreshnessMessage(state.day))}</span>` : ''}</p></section>`;
+    const metrics = `<div class="metrics">${metric('權證收盤價', fmt(q.current?.[1], 3), `${state.day || '尚無資料'} · ${priceStatus(q.current?.[1], q.current?.[2])}`)}${metric('權證漲跌幅', colored(q.pct, '%', 2), comparisonNote)}${metric('標的收盤價／指數', fmt(u.current?.[1], 3), `${u.current?.[0] || '尚無資料'} · 較 ${u.previous?.[0] || '—'} ${deltaText(u.pct, '%', 2)}`)}${metric('權證成交量', fmt(q.current?.[2], 3), `${state.day || '—'} · 張；較 ${q.volumePrevious?.[0] || '—'} ${deltaText(q.volume.delta)} 張`)}</div>`;
     const chartRows = rows.filter(r => r[0] <= state.day), underlyingRows = prices.filter(r => r[0] <= state.day);
     const charts = `<div class="split watch-charts"><section class="panel"><h2>權證價格趨勢</h2><p class="muted">元 · 選定日期以前</p>${trendChart(chartRows, 1, '權證收盤價趨勢', '元', limit)}</section><section class="panel"><h2>標的價格趨勢</h2><p class="muted">股票／ETF 為元，指數為點 · 日期獨立標示</p>${trendChart(underlyingRows, 1, '標的收盤價或指數趨勢', '元／點', limit)}</section></div><section class="panel"><h2>權證成交量趨勢</h2>${trendChart(chartRows, 2, '權證成交量趨勢', '張', limit)}</section>`;
     let branchPanel = '';
     if (!day) branchPanel = `<section class="panel"><h2>權證分點每日變化</h2>${empty(!rankingIndex || rankingError ? '分點資料暫時無法載入，請重載資料。' : tracked ? '此權證已在追蹤清單，尚無成功取得的分點資料。' : '此權證未在本次成交量前 300 檔＋固定追蹤清單中，沒有每日分點資料。')}<p class="note">價格觀察可使用全部權證；分點仍僅收錄排行，並非全部分點。</p></section>`;
     else branchPanel = `<section class="panel"><div class="panel-head"><div><span class="eyebrow">BROKER RANKING CHANGES</span><h2>權證分點每日變化</h2><p class="muted">${esc(day.date)} 對照 ${esc(prev?.date || '尚無前筆')} · 張 · 非全部分點</p></div>${dateTag(day.date, '分點')}</div><div class="filters compact">${select('dw-branch-day', '分點資料日', branchDays.map(d => d.date), state.branchDay)}<label>分點名稱或代碼<input id="dw-branch" value="${esc(state.branch)}" placeholder="例如 元大"></label><button id="dw-branch-apply">篩選分點變化</button></div>${day.date !== state.day ? `<div class="notice warning">行情 ${esc(state.day || '尚無資料')} 與分點 ${esc(day.date)} 日期不同，分開呈現，不視為同日訊號。</div>` : ''}${rankings.status !== 'ok' || taiwanFreshnessMessage(day.date) ? '<div class="notice warning">分點更新異常或資料較舊；以下保留最後成功資料，請確認日期。</div>' : ''}${table(['分點', '本期買賣超', '前期買賣超', '買賣超增減', '本期排行', '前期排行', '排行變化 / 狀態'], comparisons.map(r => tr([`${esc(r.name)}<small>${esc(r.code)}</small>`, colored(r.now?.net), colored(r.before?.net), colored(r.delta), r.now ? `${r.now.side === 'buy' ? '買超' : '賣超'} #${r.now.rank}` : '未列入', r.before ? `${r.before.side === 'buy' ? '買超' : '賣超'} #${r.before.rank}` : prev ? '未列入' : '—', `${finite(r.rankChange) ? r.rankChange > 0 ? `上升 ${r.rankChange} 名` : r.rankChange < 0 ? `下降 ${-r.rankChange} 名` : '名次不變' : '—'}<small>${esc(r.status)}</small>`])))}<p class="note">每檔買超／賣超各最多 15 名；只有兩期都出現在排行的分點才計算買賣超增減，同方向才比較名次。未上榜不等於零，也不代表新進或退出；買賣超是當日交易流量，不是庫存或單一投資人持倉。</p></section>`;
-    const daily = `<section class="panel"><div class="panel-head"><h2>每日價格與籌碼資料對照</h2><span class="tag">最近 ${limit} 個資料日</span></div>${table(['資料日', '權證收盤', '價格變動', '漲跌幅', '成交量（張）', '同日標的價格', '同日分點資料'], csv.slice().reverse().map(r => tr([esc(r.date), fmt(r.price, 3), colored(r.priceChange), colored(r.pricePct, '%', 2), fmt(r.volume, 3), fmt(r.underlyingPrice, 3), r.branchDate ? `${r.branchCount} 個排行分點` : '未取得／未收錄'])))}<p class="note">同日對照只匹配完全相同的來源日期；缺值保留「—」，不帶入其他日期的價格或籌碼。</p></section>`;
+    const daily = `<section class="panel"><div class="panel-head"><h2>每日價格與籌碼資料對照</h2><span class="tag">最近 ${limit} 個資料日</span></div>${table(['資料日', '權證收盤', '價格變動', '漲跌幅', '成交量（張）', '同日標的價格', '同日分點資料'], csv.slice().reverse().map(r => tr([esc(r.date), `${fmt(r.price, 3)}<small>${esc(r.status)}</small>`, `${colored(r.priceChange)}<small>較 ${esc(r.previousDate || '—')}</small>`, colored(r.pricePct, '%', 2), fmt(r.volume, 3), fmt(r.underlyingPrice, 3), r.branchDate ? `${r.branchCount} 個排行分點` : '未取得／未收錄'])))}<p class="note">同日對照只匹配完全相同的來源日期；缺值保留「—」，不帶入其他日期的價格或籌碼。</p></section>`;
     return controls + selectedTitle + metrics + (rows.length ? charts : empty('歷史行情尚未建立或暫時無法載入，請稍後重載資料。')) + branchPanel + daily;
   }
   function bind(render) {
@@ -130,7 +131,7 @@ export function createDailyWatch({ load, table, tr, select, metric, dateTag, emp
       catch { message('此瀏覽器無法儲存自選，請允許網站儲存空間後重試。'); }
     });
     $('dw-export')?.addEventListener('click', () => {
-      const fields = [['code', '權證代碼'], ['date', '行情資料日'], ['price', '權證收盤價'], ['priceChange', '較前筆價格變動'], ['pricePct', '較前筆漲跌幅%'], ['volume', '成交量（張）'], ['underlying', '標的代碼'], ['underlyingPrice', '同日標的收盤價或指數'], ['branchDate', '同日分點資料日'], ['branchCount', '同日排行分點數'], ['coverage', '分點範圍']];
+      const fields = [['code', '權證代碼'], ['date', '行情資料日'], ['price', '權證收盤價'], ['status', '價格狀態'], ['previousDate', '前次有成交價日'], ['priceChange', '較前次成交價變動'], ['pricePct', '較前次成交價漲跌幅%'], ['volume', '成交量（張）'], ['underlying', '標的代碼'], ['underlyingPrice', '同日標的收盤價或指數'], ['branchDate', '同日分點資料日'], ['branchCount', '同日排行分點數'], ['coverage', '分點範圍']];
       const url = URL.createObjectURL(new Blob([toCSV(csv, fields)], { type: 'text/csv;charset=utf-8' }));
       const a = document.createElement('a'); a.href = url; a.download = `warrant-daily-${code}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     });

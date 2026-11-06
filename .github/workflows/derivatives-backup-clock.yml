@@ -1,0 +1,24 @@
+name: derivatives-backup-clock
+on:
+  schedule:
+    - cron: '47 5,15 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: derivatives-backup-clock
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event.repository.private == false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Dispatch only missing collection windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/cloud_recovery.py

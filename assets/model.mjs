@@ -1,6 +1,9 @@
 import {taiwanTradingAge} from './trading-calendar.mjs';
 export {taiwanTradingAge, taiwanFreshnessMessage, setTradingCalendar} from './trading-calendar.mjs';
 export const finite = x => typeof x === 'number' && Number.isFinite(x);
+export const tradePrice = (price, volume) => finite(price) && price > 0 && finite(volume) && volume > 0 ? price : null;
+export const priceStatus = (price, volume) => tradePrice(price, volume) !== null ? '有成交價' : volume === 0 ? '當日無成交價' : !finite(volume) ? '成交量缺漏，價格未確認' : '成交價缺漏';
+export const taipeiTime = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) : '尚無紀錄';
 export const fmt = (x, digits = 0) => finite(x) ? x.toLocaleString('zh-TW', { maximumFractionDigits: digits }) : '—';
 export const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const cpLabel = x => ({ C: '買權 Call', P: '賣權 Put' }[x] || '—');
@@ -45,7 +48,7 @@ export function daysUntil(day, today = taipeiToday()) {
 }
 export function filterWarrants(rows, filters, today = taipeiToday()) {
   const query = (filters.search || '').trim().toLowerCase();
-  return rows.filter(r => {
+  return rows.map(r => ({...r, price: tradePrice(r.price, r.volume)})).filter(r => {
     const days = daysUntil(r.expiry, today), last = daysUntil(r.lastTrade, today);
     if (filters.active !== false && ((days !== null && days < 0) || (last !== null && last < 0))) return false;
     if (filters.underlying && String(r.underlying) !== filters.underlying) return false;
@@ -54,7 +57,7 @@ export function filterWarrants(rows, filters, today = taipeiToday()) {
     if (filters.style && warrantStyle(r.style) !== (filters.style === 'unknown' ? '未提供／未識別' : filters.style)) return false;
     if (Number(filters.minVolume) > 0 && (!finite(r.volume) || r.volume < Number(filters.minVolume))) return false;
     if (Number(filters.minDays) > 0 && (days === null || days < Number(filters.minDays))) return false;
-    if (Number(filters.maxPrice) > 0 && (!finite(r.price) || r.price > Number(filters.maxPrice))) return false;
+    if (filters.maxPrice !== '' && filters.maxPrice != null && Number(filters.maxPrice) >= 0 && (!finite(r.price) || r.price > Number(filters.maxPrice))) return false;
     return true;
   }).sort((a, b) => {
     const requested = Object.hasOwn(warrantSortLabels, filters.sort) ? filters.sort : 'volume';

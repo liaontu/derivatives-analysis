@@ -40,7 +40,9 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_directory.py
-      # The collector leaves unchanged files byte-identical, so an empty diff means nothing to publish.
+      - name: Record actual market check
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
+        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }}
       - name: Commit data and source status
         id: commit
         run: |

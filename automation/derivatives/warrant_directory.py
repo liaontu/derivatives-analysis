@@ -96,7 +96,7 @@ def publish(out,today=None,fetcher=c.fetch):
         feeds={s['id']:s for s in manifest.get('sources',[])}
         ids=('twse-warrants','tpex-terms','tpex-warrants','twse-volume','twse-volume-put')
         if any(feeds.get(k,{}).get('status')!='ok' for k in ids):raise ValueError('official market sources not all available')
-        basis=digest([(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids])
+        basis=digest(['traded-close-v2',[(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids]])
         if old.get('status')=='ok' and old.get('checkedDay')==today.isoformat() and old.get('basis')==basis:return True
         sources={k:{**(c.read(out/(k+'.json')) or {}),'status':feeds[k]['status']} for k in ('twse-warrants','tpex-terms')}
         with ThreadPoolExecutor(max_workers=2) as pool:

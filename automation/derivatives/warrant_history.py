@@ -2,8 +2,14 @@
 from collections import defaultdict
 from datetime import date, timedelta
 import re
+import math
 
 SAFE_CODE = re.compile(r'[A-Za-z0-9_-]{1,24}')
+
+
+def trade_price(price, volume):
+    """A close is observed only when both the price and traded volume are positive."""
+    return price if all(type(x) in (float, int) and math.isfinite(x) and x > 0 for x in (price, volume)) else None
 
 
 def merge_history(old, quotes, underlying_rows, cutoff):
@@ -12,12 +18,14 @@ def merge_history(old, quotes, underlying_rows, cutoff):
     for quote in quotes:
         code = quote['code']
         previous = history.get(code, {})
+        if any(previous.get(k) and quote.get(k) and previous[k] != quote[k] for k in ('name', 'market', 'expiry')):
+            previous = {}
         rows = {r[0]: r for r in previous.get('rows', [])}
         rows[quote['date']] = [quote['date'], quote.get('price'), quote.get('volume')]
         meta = {k: quote.get(k) for k in ('name', 'market', 'cp', 'expiry', 'strike', 'style')}
         history[code] = {**meta, 'rows': [rows[d] for d in sorted(rows) if d >= cutoff][-60:]}
     # Also prune warrants no longer supplied (expired/delisted).
-    history = {code: {**item, 'rows': [r for r in item['rows'] if r[0] >= cutoff][-60:]}
+    history = {code: {**item, 'rows': [[d, trade_price(p, v), v] for d, p, v in item['rows'] if d >= cutoff][-60:]}
                for code, item in history.items()}
     history = {code: item for code, item in sorted(history.items()) if item['rows']}
     prices = {r[0]: r for r in (old or {}).get('underlyingPrices', [])}
