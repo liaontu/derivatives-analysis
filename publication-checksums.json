@@ -63,8 +63,8 @@
     },
     {
       "path": "assets/directory.mjs",
-      "bytes": 9971,
-      "sha256": "358ce6959de0dd84a7af912fd59abf03c654a14e389f6d29f3aa2684cd7513a3"
+      "bytes": 10385,
+      "sha256": "76b083af21d7176fd392d8548952418aa392d6ddea511c2e3d231b07fbf4b541"
     },
     {
       "path": "assets/focus.mjs",
@@ -110,6 +110,11 @@
       "path": "assets/us.mjs",
       "bytes": 11271,
       "sha256": "b6a54ae81cbb6d431452507535e579e0f59a26f8f78cedac8693507e82622357"
+    },
+    {
+      "path": "assets/warrant-costs.mjs",
+      "bytes": 12879,
+      "sha256": "5aab6e049e5e72156ac6e66b8f7762bc851b79daf95f5fbd638038b1e8c8be88"
     },
     {
       "path": "assets/watch.mjs",
@@ -193,8 +198,8 @@
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 9607,
-      "sha256": "72520710f376392bf75f345bde1838b324ea67a9d621c21f54df8ebda7e78134"
+      "bytes": 10947,
+      "sha256": "7f8824f67a2983cfeb1d61feeebe50d5d55caafe95977cf1d76909397172a611"
     },
     {
       "path": "automation/derivatives/warrant_focus.py",

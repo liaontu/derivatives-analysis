@@ -16,6 +16,7 @@ MASTER = {
     'listedCompanies': 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
     'otcCompanies': 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
     'listedIssues': 'https://mopsfin.twse.com.tw/opendata/t187ap37_L.csv',
+    'otcIssues': 'https://mopsfin.twse.com.tw/opendata/t187ap37_O.csv',
 }
 FIELDS = ('listedDate','exerciseStart','lastTrade','expiry','strike','ratio','style',
           'reportedIssueK','initialIssueK','addedK','cancelledK','originalStrike','kind','quoteMethod',
@@ -30,6 +31,16 @@ def dated(rows, field, today):
     if not 0 <= (today - date.fromisoformat(day)).days <= 14: raise ValueError('stale directory')
     return day
 
+def issue_index(rows, required):
+    by_identity = defaultdict(list)
+    for row in rows:
+        if not required <= row.keys():
+            raise ValueError('official issue columns changed')
+        identity = (str(row['權證代號']).strip(), str(row['權證簡稱']).strip(), c.iso_date(row['履約截止日']))
+        by_identity[identity].append(row)
+    return by_identity
+
+
 def build(catalog, sources, raw, today):
     memberships = set()
     versions = {}
@@ -39,12 +50,10 @@ def build(catalog, sources, raw, today):
         if any(not re.fullmatch(r'[0-9A-Za-z]{2,12}',v) for v in codes): raise ValueError('invalid company code')
         memberships.update(codes)
     versions['listedIssues'] = dated(raw['listedIssues'], '出表日期', today)
-    extra = defaultdict(list)
-    for row in raw['listedIssues']:
-        if not {'權證代號','權證簡稱','履約截止日','發行單位數量(仟單位)','原始履約價格(元)/履約指數'} <= row.keys():
-            raise ValueError('listed issue columns changed')
-        identity = (str(row['權證代號']).strip(), str(row['權證簡稱']).strip(), c.iso_date(row['履約截止日']))
-        extra[identity].append(row)
+    versions['otcIssues'] = dated(raw['otcIssues'], '出表日期', today)
+    identity_fields = {'權證代號','權證簡稱','履約截止日'}
+    extra = issue_index(raw['listedIssues'], identity_fields | {'發行單位數量(仟單位)','原始履約價格(元)/履約指數'})
+    otc_dates = issue_index(raw['otcIssues'], identity_fields | {'履約開始日','最後交易日','權證類型','類別','結算方式(詳附註編號說明)'})
     by_market={}
     for market, key in [('TWSE','twse-warrants'),('TPEX','tpex-terms')]:
         payload=sources[key]
@@ -71,7 +80,17 @@ def build(catalog, sources, raw, today):
                 row.update(reportedIssueK=c.number(e.get('發行單位數量(仟單位)')),originalStrike=c.number(e.get('原始履約價格(元)/履約指數')),
                            kind=e.get('類別'),quoteMethod=e.get('流動量提供者報價方式'),settlementCode=e.get('結算方式(詳附註編號說明)'),
                            issueDateOfReport=versions['listedIssues'])
-        elif source and row['initialIssueK'] is not None: row['issueDateOfReport']=source['date']
+        elif source:
+            if row['initialIssueK'] is not None:
+                row['issueDateOfReport'] = source['date']
+            matches = otc_dates.get((code, q['name'].strip(), q.get('expiry')), [])
+            if len(matches) == 1 and versions['otcIssues'] == source['date'] == q['date'] and c.cp(matches[0]['權證類型']) == q['cp']:
+                issue = matches[0]
+                start, last = (c.iso_date(issue.get(key)) for key in ('履約開始日','最後交易日'))
+                row.update(exerciseStart=start if start and source.get('listedDate','') and source['listedDate'] <= start <= q['expiry'] else None,
+                           lastTrade=last if last and source.get('listedDate','') and source['listedDate'] <= last <= q['expiry'] else None,
+                           kind=issue.get('類別'), settlementCode=issue.get('結算方式(詳附註編號說明)'),
+                           scheduleReportDate=versions['otcIssues'])
         groups[q['underlying']].append(row)
     if not groups: raise ValueError('no verified individual stock warrants')
     items=[]; coverage=Counter();markets=Counter();trade=Counter()
@@ -96,7 +115,7 @@ def publish(out,today=None,fetcher=c.fetch):
         feeds={s['id']:s for s in manifest.get('sources',[])}
         ids=('twse-warrants','tpex-terms','tpex-warrants','twse-volume','twse-volume-put')
         if any(feeds.get(k,{}).get('status')!='ok' for k in ids):raise ValueError('official market sources not all available')
-        basis=digest(['traded-close-v2',[(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids]])
+        basis=digest(['mops-otc-dates-v1',[(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids]])
         if old.get('status')=='ok' and old.get('checkedDay')==today.isoformat() and old.get('basis')==basis:return True
         sources={k:{**(c.read(out/(k+'.json')) or {}),'status':feeds[k]['status']} for k in ('twse-warrants','tpex-terms')}
         with ThreadPoolExecutor(max_workers=2) as pool:
