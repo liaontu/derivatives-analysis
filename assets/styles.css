@@ -87,9 +87,14 @@ tbody tr:hover{background:var(--soft)}
 .pagination{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px;font-size:.82rem;color:var(--text-3)}
 .pagination>div{display:flex;gap:8px}
 .empty{padding:35px 15px;color:var(--text-3);text-align:center;font-size:.9rem}
-.chart{width:100%;overflow:hidden}
+.chart{width:100%;overflow:hidden;container-type:inline-size}
 .chart svg{display:block;width:100%;height:auto;max-height:270px}
 .chart text{font-family:inherit;fill:var(--text-3);font-size:11px}
+/* Every chart carries three drawings; show the one whose labels stay readable at this container width. */
+.chart .chart-m,.chart .chart-s{display:none}
+.chart .chart-m text,.chart .chart-s text,.chart .chart-bars text{font-size:12.5px}
+@container (max-width:699px){.chart .chart-l{display:none}.chart .chart-m{display:block}}
+@container (max-width:459px){.chart .chart-m{display:none}.chart .chart-s{display:block}}
 .chart-legend{display:flex;gap:20px;font-size:.8rem;margin-bottom:12px;color:var(--text-2)}
 .chart-legend span:before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:7px}
 .chart-legend span:nth-child(2):before{background:var(--violet)}

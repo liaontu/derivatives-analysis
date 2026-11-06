@@ -1,5 +1,5 @@
 import { reportContent, validReportId } from './lab-reports.mjs';
-import { esc, fmt, finite, toCSV } from './model.mjs';
+import { esc, fmt, finite, toCSV, chartFrames, chartGutter } from './model.mjs';
 
 const number = (x, suffix = '') => finite(x) ? `${fmt(x, 2)}${suffix}` : '—';
 export function accountStats(account, initial) {
@@ -19,10 +19,15 @@ export function equityChart(points) {
   const values = points.filter(p => finite(p.equity)).map(p => p.equity);
   if (values.length < 2) return '<div class="empty">開始後累積至少兩個有效資料日，才顯示帳戶淨值曲線。</div>';
   const low = Math.min(...values), high = Math.max(...values), range = high - low || Math.max(1, high * .02);
-  const x = i => 60 + i / Math.max(1, points.length - 1) * 600, y = v => 175 - (v - low) / range * 135;
-  let drawing = false;
-  const path = points.map((p, i) => { if (!finite(p.equity)) { drawing = false; return ''; } const part = `${drawing ? 'L' : 'M'}${x(i)},${y(p.equity)}`; drawing = true; return part; }).join(' ');
-  return `<div class="chart"><svg viewBox="0 0 700 220" role="img" aria-label="模擬帳戶淨值"><title>模擬帳戶淨值；缺值中斷</title>${[low, high].map(v => `<text x="55" y="${y(v)}" text-anchor="end">${fmt(v)}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="2.4" fill="none"/><text x="60" y="207">${esc(points[0].date)}</text><text x="660" y="207" text-anchor="end">${esc(points.at(-1).date)}</text></svg></div>`;
+  const ticks = [low, high].map(v => [v, fmt(v)]);
+  return chartFrames(({ cls, width, font }) => {
+    const wide = cls === 'chart-l', height = wide ? 220 : cls === 'chart-m' ? 210 : 200;
+    const left = chartGutter(ticks.map(t => t[1]), font, wide ? 60 : 30), right = width - (wide ? 40 : 10), bottom = height - 45, top = wide ? 40 : 22;
+    const x = i => left + i / Math.max(1, points.length - 1) * (right - left), y = v => bottom - (v - low) / range * (bottom - top);
+    let drawing = false;
+    const path = points.map((p, i) => { if (!finite(p.equity)) { drawing = false; return ''; } const part = `${drawing ? 'L' : 'M'}${x(i)},${y(p.equity)}`; drawing = true; return part; }).join(' ');
+    return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" role="img" aria-label="模擬帳戶淨值"><title>模擬帳戶淨值；缺值中斷</title>${ticks.map(([v, text]) => `<text x="${left - 5}" y="${y(v)}" text-anchor="end">${text}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="${wide ? 2.4 : 2}" fill="none"/><text x="${left}" y="${height - 13}">${esc(points[0].date)}</text><text x="${right}" y="${height - 13}" text-anchor="end">${esc(points.at(-1).date)}</text></svg>`;
+  });
 }
 
 export function labContent(report, selected, { table, tr, select, metric, empty }) {

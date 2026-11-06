@@ -1,4 +1,4 @@
-import { finite, fmt, esc, priceStatus, taipeiTime, cpLabel, warrantCp, warrantStyle, warrantSortLabels, warrantUnderlyings, resolveWarrantUnderlying, taipeiToday, daysUntil, filterWarrants, oiDistribution, previousOi, toCSV, isStaleSource, setTradingCalendar, taiwanTradingAge } from './model.mjs';
+import { finite, fmt, esc, priceStatus, taipeiTime, cpLabel, warrantCp, warrantStyle, warrantSortLabels, warrantUnderlyings, resolveWarrantUnderlying, taipeiToday, daysUntil, filterWarrants, oiDistribution, previousOi, toCSV, isStaleSource, setTradingCalendar, taiwanTradingAge, chartFrames, chartGutter } from './model.mjs';
 import { createDirectory } from './directory.mjs';
 import { createStockOptions } from './stock-options.mjs';
 import { createUSPages } from './us.mjs';
@@ -69,10 +69,16 @@ async function load(name) {
 function lineChart(points, label, percent = false, digits = percent ? 1 : 0) {
   const valid = points.filter(p => finite(p.value));
   if (valid.length < 2) return empty(`已累積 ${valid.length} 個資料日；滿兩日後顯示趨勢。每日自動累積，最多保留 60 個資料日。`);
-  const width = 700, height = 230, low = Math.min(...valid.map(p => p.value)), high = Math.max(...valid.map(p => p.value));
-  const range = high - low || Math.max(1, Math.abs(high) * .02), x = i => 55 + i / (valid.length - 1) * 620, y = v => 178 - (v - low) / range * 145;
-  const path = valid.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-  return `<div class="chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${[low, low + range / 2, low + range].map(v => `<line x1="55" x2="680" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="48" y="${y(v) + 4}" text-anchor="end">${fmt(v, digits)}${percent ? '%' : ''}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="2.4" fill="none"/>${valid.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="2.7" fill="#77e2d0"><title>${esc(p.date)}：${fmt(p.value, Math.max(2, digits))}${percent ? '%' : ''}</title></circle>`).join('')}<text x="55" y="209">${esc(valid[0].date)}</text><text x="680" y="209" text-anchor="end">${esc(valid.at(-1).date)}</text></svg></div>`;
+  const low = Math.min(...valid.map(p => p.value)), high = Math.max(...valid.map(p => p.value));
+  const range = high - low || Math.max(1, Math.abs(high) * .02), unit = percent ? '%' : '';
+  const ticks = [low, low + range / 2, low + range].map(v => [v, fmt(v, digits) + unit]);
+  return chartFrames(({ cls, width, font }) => {
+    const wide = cls === 'chart-l', height = wide ? 230 : cls === 'chart-m' ? 215 : 205;
+    const left = chartGutter(ticks.map(t => t[1]), font, wide ? 55 : 30), right = width - (wide ? 20 : 8), bottom = height - 52, top = wide ? 33 : 22;
+    const x = i => left + i / (valid.length - 1) * (right - left - 5), y = v => bottom - (v - low) / range * (bottom - top);
+    const path = valid.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+    return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${ticks.map(([v, text]) => `<line x1="${left}" x2="${right}" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="${left - 7}" y="${y(v) + 4}" text-anchor="end">${text}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="${wide ? 2.4 : 2}" fill="none"/>${valid.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="${wide ? 2.7 : cls === 'chart-m' ? 2.3 : 1.9}" fill="#77e2d0"><title>${esc(p.date)}：${fmt(p.value, Math.max(2, digits))}${unit}</title></circle>`).join('')}<text x="${left}" y="${height - 21}">${esc(valid[0].date)}</text><text x="${right}" y="${height - 21}" text-anchor="end">${esc(valid.at(-1).date)}</text></svg>`;
+  });
 }
 
 function metric(label, value, note, cls = '') {
@@ -165,7 +171,15 @@ function quotePanel(payload, kind) {
     const start = Math.max(0, Math.min(distribution.length - 21, peak - 10));
     const windowRows = distribution.slice(start, start + 21);
     const max = Math.max(...windowRows.flatMap(r => [r.C || 0, r.P || 0]), 1);
-    chart = `<div class="chart-legend"><span>買權 Call</span><span>賣權 Put</span></div><div class="chart"><svg viewBox="0 0 800 250" role="img" aria-label="履約價未平倉分布"><title>履約價未平倉分布</title>${[0, .5, 1].map(p => `<line x1="50" x2="785" y1="${195 - 170 * p}" y2="${195 - 170 * p}" stroke="#2c4050"/><text x="43" y="${199 - 170 * p}" text-anchor="end">${fmt(max * p)}</text>`).join('')}${windowRows.map((r, i) => { const step = 720 / Math.max(1, windowRows.length), x = 55 + i * step, w = Math.max(2, step * .34); return `<rect x="${x}" y="${195 - (r.C || 0) / max * 170}" width="${w}" height="${(r.C || 0) / max * 170}" fill="#77e2d0"><title>${r.strike} 買權：${fmt(r.C)} 口</title></rect><rect x="${x + w + 1}" y="${195 - (r.P || 0) / max * 170}" width="${w}" height="${(r.P || 0) / max * 170}" fill="#b3a2ff"><title>${r.strike} 賣權：${fmt(r.P)} 口</title></rect>${i % 2 === 0 ? `<text x="${x + w}" y="220" text-anchor="middle">${fmt(r.strike)}</text>` : ''}`; }).join('')}</svg></div><p class="muted">顯示未平倉量最大履約價附近最多 21 檔；完整履約價見下表。缺值在表中顯示「—」。</p>`;
+    const levels = [0, .5, 1].map(p => [p, fmt(max * p)]);
+    chart = `<div class="chart-legend"><span>買權 Call</span><span>賣權 Put</span></div>${chartFrames(({ cls, width: size, font }) => {
+      // The wide drawing is 800 units across, so its labels use the larger size (.chart-bars in the stylesheet).
+      const wide = cls === 'chart-l', width = wide ? 800 : size, height = wide ? 250 : cls === 'chart-m' ? 235 : 220;
+      const left = chartGutter(levels.map(l => l[1]), Math.max(font, 12.5), wide ? 50 : 30), right = width - (wide ? 15 : 8), base = height - 55, tall = base - (wide ? 25 : 20);
+      // Narrow drawings label fewer strikes and leave room for the last label.
+      const step = (right - left - (wide ? 15 : 22)) / Math.max(1, windowRows.length), every = wide ? 2 : cls === 'chart-m' ? 3 : 5, w = Math.max(wide ? 2 : 1.5, step * .34);
+      return `<svg class="${cls} chart-bars" viewBox="0 0 ${width} ${height}" role="img" aria-label="履約價未平倉分布"><title>履約價未平倉分布</title>${levels.map(([p, text]) => `<line x1="${left}" x2="${right}" y1="${base - tall * p}" y2="${base - tall * p}" stroke="#2c4050"/><text x="${left - 7}" y="${base + 4 - tall * p}" text-anchor="end">${text}</text>`).join('')}${windowRows.map((r, i) => { const x = left + 5 + i * step; return `<rect x="${x}" y="${base - (r.C || 0) / max * tall}" width="${w}" height="${(r.C || 0) / max * tall}" fill="#77e2d0"><title>${r.strike} 買權：${fmt(r.C)} 口</title></rect><rect x="${x + w + 1}" y="${base - (r.P || 0) / max * tall}" width="${w}" height="${(r.P || 0) / max * tall}" fill="#b3a2ff"><title>${r.strike} 賣權：${fmt(r.P)} 口</title></rect>${i % every === 0 ? `<text x="${x + w}" y="${base + 25}" text-anchor="middle">${fmt(r.strike)}</text>` : ''}`; }).join('')}</svg>`;
+    })}<p class="muted">顯示未平倉量最大履約價附近最多 21 檔；完整履約價見下表。缺值在表中顯示「—」。</p>`;
   }
   return `<section class="panel"><div class="panel-head"><div><span class="eyebrow">${opt ? 'OPEN INTEREST BY STRIKE' : 'CONTRACT QUOTES'}</span><h2>${opt ? '履約價未平倉分布與行情' : '期貨契約行情'}</h2></div>${dateTag(payload.date)}</div><div class="filters compact">${select('quote-contract', '商品', contracts, contract, contractName)}${opt ? select('option-expiry', '到期月份 / 週別', months, state.optionExpiry) : ''}</div>${chart}${table(opt ? ['履約價 / 權別', '結算價', '最後成交價', '成交量（口）', '未平倉（口）', '最後買價', '最後賣價'] : ['月份', '結算價', '最後成交價', '成交量（口）', '未平倉（口）', '最後買價', '最後賣價'], sorted.slice(page * 40, (page + 1) * 40).map(r => tr([opt ? `${fmt(r.strike, 2)}<small>${cpLabel(r.cp)}</small>` : esc(r.month), fmt(r.price, 3), fmt(r.last, 3), fmt(r.volume), fmt(r.oi), fmt(r.bid, 3), fmt(r.ask, 3)])))}<div class="pagination"><span>${fmt(chosen.length)} 筆 · 第 ${page + 1} / ${Math.max(1, Math.ceil(chosen.length / 40))} 頁</span><div><button data-quote-page="-1" ${page === 0 ? 'disabled' : ''}>上一頁</button><button data-quote-page="1" ${(page + 1) * 40 >= chosen.length ? 'disabled' : ''}>下一頁</button></div></div><p class="note">一般交易時段，日夜盤未平倉不重複加總。結算價可在沒有成交時存在；最後成交價、買賣價缺值不補成零。</p></section>`;
 }

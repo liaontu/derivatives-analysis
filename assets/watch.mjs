@@ -1,4 +1,4 @@
-import { taiwanFreshnessMessage, esc, fmt, finite, priceStatus, tradePrice, resolveWarrantUnderlying, warrantCp, warrantStyle, toCSV } from './model.mjs';
+import { taiwanFreshnessMessage, esc, fmt, finite, priceStatus, tradePrice, resolveWarrantUnderlying, warrantCp, warrantStyle, toCSV, chartFrames, chartGutter } from './model.mjs';
 import {loadWarrants} from './catalog.mjs';
 
 export function change(current, previous) {
@@ -32,14 +32,19 @@ export function trendChart(rows, column, title, unit, limit) {
   if (valid.length < 2) return `<div class="empty">目前有 ${valid.length} 個有效資料日；累積滿兩日後顯示趨勢。<br>只保留真實來源資料，不回填示範走勢。</div>`;
   const low = Math.min(...valid.map(r => r[column])), high = Math.max(...valid.map(r => r[column]));
   const span = high - low || Math.max(1, Math.abs(low) * .02);
-  const x = i => 65 + i / Math.max(1, points.length - 1) * 590, y = n => 170 - (n - low) / span * 130;
-  let connected = false;
-  const path = points.map((r, i) => {
-    if (!finite(r[column])) { connected = false; return ''; }
-    const command = connected ? 'L' : 'M'; connected = true;
-    return `${command}${x(i)},${y(r[column])}`;
-  }).join(' ');
-  return `<div class="chart"><svg viewBox="0 0 700 220" role="img" aria-label="${esc(title)}"><title>${esc(title)}（${esc(unit)}），缺值中斷連線</title>${[low, low + span / 2, low + span].map(v => `<line x1="65" x2="655" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="58" y="${y(v) + 4}" text-anchor="end">${fmt(v, 3)}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="2.5" fill="none"/>${points.map((r, i) => finite(r[column]) ? `<circle cx="${x(i)}" cy="${y(r[column])}" r="3" fill="#77e2d0"><title>${esc(r[0])}：${fmt(r[column], 3)} ${esc(unit)}</title></circle>` : '').join('')}<text x="65" y="205">${esc(points[0][0])}</text><text x="655" y="205" text-anchor="end">${esc(points.at(-1)[0])}</text></svg></div>`;
+  const ticks = [low, low + span / 2, low + span].map(v => [v, fmt(v, 3)]);
+  return chartFrames(({ cls, width, font }) => {
+    const wide = cls === 'chart-l', height = wide ? 220 : cls === 'chart-m' ? 210 : 200;
+    const left = chartGutter(ticks.map(t => t[1]), font, wide ? 65 : 30), right = width - (wide ? 45 : 10), bottom = height - 50, top = wide ? 40 : 22;
+    const x = i => left + i / Math.max(1, points.length - 1) * (right - left), y = n => bottom - (n - low) / span * (bottom - top);
+    let connected = false;
+    const path = points.map((r, i) => {
+      if (!finite(r[column])) { connected = false; return ''; }
+      const command = connected ? 'L' : 'M'; connected = true;
+      return `${command}${x(i)},${y(r[column])}`;
+    }).join(' ');
+    return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}"><title>${esc(title)}（${esc(unit)}），缺值中斷連線</title>${ticks.map(([v, text]) => `<line x1="${left}" x2="${right}" y1="${y(v)}" y2="${y(v)}" stroke="#2c4050"/><text x="${left - 7}" y="${y(v) + 4}" text-anchor="end">${text}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="${wide ? 2.5 : 2}" fill="none"/>${points.map((r, i) => finite(r[column]) ? `<circle cx="${x(i)}" cy="${y(r[column])}" r="${wide ? 3 : cls === 'chart-m' ? 2.4 : 1.9}" fill="#77e2d0"><title>${esc(r[0])}：${fmt(r[column], 3)} ${esc(unit)}</title></circle>` : '').join('')}<text x="${left}" y="${height - 15}">${esc(points[0][0])}</text><text x="${right}" y="${height - 15}" text-anchor="end">${esc(points.at(-1)[0])}</text></svg>`;
+  });
 }
 
 export function createDailyWatch({ load, table, tr, select, metric, dateTag, empty }) {

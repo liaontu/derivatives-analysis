@@ -89,3 +89,8 @@ export function toCSV(rows, fields) {
   const cell = v => '"' + String(v ?? '').replace(/^[=+@\t\r]/, c => "'" + c).replace(/"/g, '""') + '"';
   return '\uFEFF' + [fields.map(f => cell(f[1])).join(','), ...rows.map(r => fields.map(f => cell(r[f[0]])).join(','))].join('\r\n');
 }
+// Each chart is drawn at three widths and the stylesheet shows whichever fits its container, so axis labels stay readable on phones and in two-column layouts.
+export const chartSizes = [{ cls: 'chart-l', width: 700, font: 11 }, { cls: 'chart-m', width: 520, font: 12.5 }, { cls: 'chart-s', width: 340, font: 12.5 }];
+// Room for right-aligned axis labels: about 0.6em per character plus padding.
+export const chartGutter = (labels, font, floor = 30) => Math.max(floor, Math.ceil(Math.max(0, ...labels.map(s => String(s).length)) * font * .6 + 10));
+export const chartFrames = draw => `<div class="chart">${chartSizes.map(draw).join('')}</div>`;

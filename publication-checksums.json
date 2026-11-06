@@ -43,8 +43,8 @@
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 47166,
-      "sha256": "219ab976d33280dc7df99248b2f2388593e32e8ac5acce26defa5a7ceb49f011"
+      "bytes": 48440,
+      "sha256": "75cd3d034db68fedc1bade988fe310f024d4e729bc54f82640c061fb4e745996"
     },
     {
       "path": "assets/branches.mjs",
@@ -83,13 +83,13 @@
     },
     {
       "path": "assets/lab.mjs",
-      "bytes": 11990,
-      "sha256": "caf8a2046f07dd9a59a50ff373b371edc19160307c93bc715e5976c306d40219"
+      "bytes": 12456,
+      "sha256": "7a13984896ea91cf90d7af2cd6c36e34585bfce48202e1f6dd28928eecc9aae3"
     },
     {
       "path": "assets/model.mjs",
-      "bytes": 6601,
-      "sha256": "39f7324c8b731ec0c96fc156a43e76c53a079147820a26971cb8ff5dece0a693"
+      "bytes": 7247,
+      "sha256": "6276a9f4317820585df11f6cc5d66feaf39404eb30661988e4379569ebf08879"
     },
     {
       "path": "assets/spreads.mjs",
@@ -103,8 +103,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 17308,
-      "sha256": "ce19ef8ab7bde519c9be22c2b9fa72030978fc1cbdf64cf258bcea9cf9997059"
+      "bytes": 17752,
+      "sha256": "7c1a9a2c156e3271e9d2b298d0cde50795c64de70214844aff75576f64546a3b"
     },
     {
       "path": "assets/trading-calendar.mjs",
@@ -123,8 +123,8 @@
     },
     {
       "path": "assets/watch.mjs",
-      "bytes": 18574,
-      "sha256": "239a939fc1beb800946bbd1b155a94e2a58825b1818a0d5845fd1058ecc87fbf"
+      "bytes": 19100,
+      "sha256": "dc2f3f4a24bc2e5c0d15b75911483bf8c032e4b79df69e08677c9a48aad13829"
     },
     {
       "path": "automation/derivatives/backfill_warrants.py",
