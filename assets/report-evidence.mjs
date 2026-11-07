@@ -12,6 +12,8 @@ export function evidencePanel(report, {table, tr}) {
   const missing = q.missing.map(r => tr([esc(r.label), `${fmt(r.count)} ${esc(r.unit)}`, esc(r.basis)]));
   const issues = Object.entries(q.branchIssues || {}).map(([k,v]) => esc(k) + ' ' + fmt(v)).join('；');
   const gaps = q.missing.filter(r => r.count > 0 && r.label !== '零成交').map(r => `${esc(r.label)} ${fmt(r.count)} ${esc(r.unit)}`).join('；');
+  const imported = report.historyBackfill;
+  const importNote = imported ? `<div class="notice">上櫃官方歷史補入：<strong>${fmt(imported.days)} 個交易日、${fmt(imported.quoteRows)} 筆行情</strong>（含零成交），其中 ${fmt(imported.tradedRows)} 筆有有效成交價。<p>${esc(imported.basis)}</p><a href="data/derivatives/tpex-history-backfill.json" download>下載逐日來源、筆數與 SHA-256 →</a></div>` : '';
   const review = report.strategyReview;
   let strategy = '';
   if (review) {
@@ -21,7 +23,7 @@ export function evidencePanel(report, {table, tr}) {
   }
   const follow=report.followupReview;
   const tracking=follow ? `<h3>先前觀察清單後續</h3><p>${esc(follow.message)}</p><p class="muted">來源資料至 ${esc(follow.sourceAsOf || '尚無')} · ${esc(follow.sourceRules || '')}</p>${table(['來源模式／觀察期','本期到觀察日','權證／現股可比較','權證／現股漲跌中位數','狀態筆數'],follow.rows.map(r=>tr([`${esc(r.label)}／${r.horizon} 日`,fmt(r.total),`${fmt(r.warrantSamples)}／${fmt(r.stockSamples)}`,`${pct(r.warrantMedianPct)}／${pct(r.stockMedianPct)}`,Object.entries(r.statuses).map(([k,v])=>esc(k)+' '+fmt(v)).join('；')||'尚無樣本'])) )}` : '';
-  return `<section class="report-evidence"><h3>資料範圍、缺漏與有效樣本數</h3><p>${esc(q.scope)}${q.universeDate ? ` 名錄檢查日 ${esc(q.universeDate)}。` : ''}</p>${gaps ? `<p class="notice warning">缺漏與比較限制：${gaps}。</p>` : ''}<h4>有效樣本（各項分開計算）</h4>${table(['統計項目','有效／候選樣本','計算條件'], samples)}<details><summary>展開缺漏與排除明細（${q.missing.length} 類）</summary>${table(['項目','數量','說明'], missing)}${issues ? `<p>分點核對：${issues}</p>` : ''}</details><ul>${q.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${tracking}${strategy}</section>`;
+  return `<section class="report-evidence"><h3>資料範圍、缺漏與有效樣本數</h3>${importNote}<p>${esc(q.scope)}${q.universeDate ? ` 名錄檢查日 ${esc(q.universeDate)}。` : ''}</p>${gaps ? `<p class="notice warning">缺漏與比較限制：${gaps}。</p>` : ''}<h4>有效樣本（各項分開計算）</h4>${table(['統計項目','有效／候選樣本','計算條件'], samples)}<details><summary>展開缺漏與排除明細（${q.missing.length} 類）</summary>${table(['項目','數量','說明'], missing)}${issues ? `<p>分點核對：${issues}</p>` : ''}</details><ul>${q.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${tracking}${strategy}</section>`;
 }
 
 export function dailyPanel(report, {table, tr, metric}) {

@@ -1,5 +1,5 @@
 import {esc,taipeiTime} from './model.mjs';
-const names={collect:'官方行情',directory:'發行名錄',option_history:'選擇權歷史',stock_options:'個股選擇權',reports:'量價／籌碼日報',journal:'整合日報',report_brief:'權證與現股日報',relationship:'近月關聯',signal_backtest:'分點線索回測',branches:'分點排行',coverage:'覆蓋檢查',series:'週月報',lab:'模擬交易',lab_reports:'模擬觀察報告',focus:'重點清單',spreads:'價差觀察'};
+const names={collect:'官方行情',directory:'發行名錄',option_history:'選擇權歷史',stock_options:'個股選擇權',reports:'量價／籌碼日報',journal:'整合日報',report_brief:'權證與現股日報',tpex_history:'上櫃歷史補漏',relationship:'近月關聯',signal_backtest:'分點線索回測',branches:'分點排行',coverage:'覆蓋檢查',series:'週月報',lab:'模擬交易',lab_reports:'模擬觀察報告',focus:'重點清單',spreads:'價差觀察'};
 export function latestModules(receipts) {
   const result={};
   for(const receipt of receipts.filter(Boolean)) for(const [key,row] of Object.entries(receipt.modules||{})) {

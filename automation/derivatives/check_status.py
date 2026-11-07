@@ -10,6 +10,7 @@ ARTIFACTS = {
     'option_history': ['option-history.json'], 'stock_options': ['stock-option-watch.json'],
     'reports': ['daily-reports/warrant-volume/index.json', 'daily-reports/positioning/index.json'],
     'journal': ['daily-reports/warrant-journal/index.json'],
+    'tpex_history': ['tpex-history-backfill.json'],
     'relationship': ['warrant-relationship/index.json'], 'signal_backtest': ['warrant-signal-backtest/outcomes.json'],
     'branches': ['warrant-branches.json'], 'coverage': ['stock-warrant-coverage.json'],
     'series': ['warrant-series-reports.json'], 'lab': ['warrant-lab.json'],

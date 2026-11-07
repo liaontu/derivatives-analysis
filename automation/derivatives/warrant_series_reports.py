@@ -18,11 +18,11 @@ from statistics import median
 if __package__:
     from .publication import save_text
     from .trading_calendar import load_calendar
-    from .report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review
+    from .report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill
 else:
     from publication import save_text
     from trading_calendar import load_calendar
-    from report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review
+    from report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill
 
 RULES = {'version': 'warrant-series-v2', 'liquidShare': 0.8, 'liquidMinDays': 3, 'minPairs': 10,
          'topUnderlyings': 30, 'topWarrants': 5,
@@ -265,6 +265,7 @@ def build_report(output, kind, start, end):
               'previous': previous, 'limitations': LIMITATIONS}
     report['quality'] = period_quality(report, universe)
     report['followupReview'] = followup_review(output, start_key, end_key)
+    report['historyBackfill'] = history_backfill(output, start_key, end_key)
     report['status'] = 'partial' if market['missingDays'] else 'ok' if market['dataDays'] else 'missing'
     if kind == 'monthly':
         report['strategyReview'] = strategy_review(output, end_key)

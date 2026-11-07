@@ -15,12 +15,14 @@ try:
     from .trading_calendar import load_calendar
     from .warrant_issuers import issuer_of, branch_relation, customer_eligible, POLICY, RULES_SHA256
     from .warrant_signals import SIGNAL_RULES
+    from .report_evidence import history_backfill
 except ImportError:
     from daily_reports import read, save, aligned, baseline_days, WARRANT_SOURCES, traded, volume_exclusion
     from warrant_focus import numeric, percent, volume_evidence, spread_evidence, RULES as FOCUS_RULES
     from trading_calendar import load_calendar
     from warrant_issuers import issuer_of, branch_relation, customer_eligible, POLICY, RULES_SHA256
     from warrant_signals import SIGNAL_RULES
+    from report_evidence import history_backfill
 
 VERSION = 'warrant-journal-v2'
 RULES = {'version': VERSION, 'minVolume': 100, 'volumeMultiple': 2, 'volumeWindow': 5,
@@ -364,6 +366,7 @@ def track(output, report, histories, calendar):
                                 'medianPct': median(values) if values else None, 'positive': sum(v > 0 for v in values),
                                 'statuses': dict(Counter(r['status'] for r in rows))})
     data = {'asOf': report['date'], 'rules': RULES, 'basis': {'recorded': recorded['basis'], 'research': research['basis']},
+            'historyBackfill': history_backfill(output, end=report['date']),
             'method': '訊號日／封存日之後首個交易日收盤為基準，再觀察第1、3、5、10個交易日；缺價不順延，不視為成交或扣費後報酬。',
             'summary': summary, 'items': outcomes}
     save(output / 'daily-reports/warrant-journal/outcomes.json', data)

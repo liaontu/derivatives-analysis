@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 5143,
-      "sha256": "7d42184a50f49a52078d71d73ab3f1f553676fdc6b3f49c986809e892d275ea9"
+      "bytes": 5467,
+      "sha256": "cd8568858f400168ccc6a000e17348ab545f8f9a73de15e59b50db976ccd42ec"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -43,8 +43,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 11440,
-      "sha256": "24924c4ae84996eea52a4c1c12387061f950250aae9c870f54b1f563c315a484"
+      "bytes": 11896,
+      "sha256": "0424011ef0c25a9f7a78bf0095ed889d621a05bea070cbbfebb89e0c359fa876"
     },
     {
       "path": "assets/app.mjs",
@@ -108,13 +108,13 @@
     },
     {
       "path": "assets/pipeline-health.mjs",
-      "bytes": 2750,
-      "sha256": "903e9d39af5723be9ceba81a843406f019edea1d2f94ebeb85699f85a4cef736"
+      "bytes": 2784,
+      "sha256": "1dda3cb1fa0bb8f16add4d09dfa48af73702e93850a16c2d67bf01ed44480a33"
     },
     {
       "path": "assets/report-evidence.mjs",
-      "bytes": 6881,
-      "sha256": "b998891894e9e42ed081ae06584241a5556fb57c1467565c3125463841f05bf5"
+      "bytes": 7339,
+      "sha256": "f35fe64ef945b00c44f47b6d2621c61ed97813938be75ff935c1204e3fa4d34f"
     },
     {
       "path": "assets/series-reports.mjs",
@@ -158,8 +158,8 @@
     },
     {
       "path": "assets/warrant-journal.mjs",
-      "bytes": 20105,
-      "sha256": "3f622bce585a9095e474fa11c1cfff89ebfca32693b5983493bbf907d66ba3b9"
+      "bytes": 20477,
+      "sha256": "87802a6f9ceebe8282f74726d863a4e75a459021ae5ff57539c0b4a56e656757"
     },
     {
       "path": "assets/warrant-relationship.mjs",
@@ -188,8 +188,8 @@
     },
     {
       "path": "automation/derivatives/check_status.py",
-      "bytes": 5200,
-      "sha256": "3a466f6b5ffa87be21686083b73d551a1395f86378fbcde6abafe5e170da7520"
+      "bytes": 5252,
+      "sha256": "49c9f7ce034e5fa8ed8402b2f6bdc2ea4bea38d43180a1ea23efa4426932ff91"
     },
     {
       "path": "automation/derivatives/cloud_recovery.py",
@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/report_evidence.py",
-      "bytes": 15847,
-      "sha256": "445465744ce38689139eebcb8da7f7d379740c6b625abb1faed09203564db933"
+      "bytes": 17025,
+      "sha256": "a80c38deaee64b9e417b5cfb7c52b05ec8486f4dbae383bb6f802433ecd6289e"
     },
     {
       "path": "automation/derivatives/schedule_health.py",
@@ -245,6 +245,11 @@
       "path": "automation/derivatives/taiwan-calendar.json",
       "bytes": 2208,
       "sha256": "90ed8ea3e0178a4666105c3add1ab4245ae3b63b15a2bd1587acba721a09acfb"
+    },
+    {
+      "path": "automation/derivatives/tpex_history.py",
+      "bytes": 10525,
+      "sha256": "5cf61cc4ba46b4cfb58d4302ad02cdaf9eb55fb39d6f3d1cb4fa14429de81186"
     },
     {
       "path": "automation/derivatives/trading_calendar.py",
@@ -293,8 +298,8 @@
     },
     {
       "path": "automation/derivatives/warrant_journal.py",
-      "bytes": 23461,
-      "sha256": "b63b4161c9b70a5ab6d16a64292dd7ff4f160bfc6e7609d7780295cae2d641a4"
+      "bytes": 23637,
+      "sha256": "9fd52c3d7dd3ee17734560b2aa6d88ae15847a08a55fec0fba0ab2a5706f8dd0"
     },
     {
       "path": "automation/derivatives/warrant_lab.py",
@@ -323,8 +328,8 @@
     },
     {
       "path": "automation/derivatives/warrant_series_reports.py",
-      "bytes": 45472,
-      "sha256": "61d75aec1a8395a7dbf174f9c10e21236dd028ad320865d9ed0f4063ab91250e"
+      "bytes": 45585,
+      "sha256": "9b7f0e9d6f93e2aa155c17ce5a9efd062664912cda995e059d4f74ec43eef301"
     },
     {
       "path": "automation/derivatives/warrant_signal_backtest.py",

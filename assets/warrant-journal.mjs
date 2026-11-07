@@ -70,6 +70,7 @@ export function createWarrantJournal({load,table,tr,select,metric}) {
     const summary=data.summary.filter(r=>r.mode===state.mode&&r.horizon===Number(state.horizon));
     const pagination=pager('opage',selected.length);
     return `<section class="panel"><h2>訊號後續觀察</h2><p>評估截至 ${esc(data.asOf)}；${esc(data.method)}</p>
+      ${data.historyBackfill ? `<p class="notice">已納入免費上櫃歷史行情 ${fmt(data.historyBackfill.days)} 個資料日（含比較基準日）。${esc(data.historyBackfill.basis)}原封存樣本不重新選樣，僅以補齊的價格重算後續結果。<a href="data/derivatives/tpex-history-backfill.json" download>逐日補抓證據 JSON →</a></p>` : ''}
       <div class="filters">${select('journal-mode','樣本來源',['recorded','research'],state.mode,v=>v==='recorded'?'啟用後封存觀察':'歷史放量研究（非即時）')}${select('journal-horizon','基準日後交易日',['1','3','5','10'],state.horizon,v=>v+' 日')}</div>
       <p class="notice">${esc(data.basis[state.mode])}每版重點清單前 20 檔封存，日內依權證去重；歷史研究每個資料日前 20 檔、每標的最多 2 檔。不同訊號與重複日期可能互相關聯。</p>
       ${table(['權別','樣本數／可比較','價格上漲筆數','價格變動中位數','不足原因'],summary.map(r=>tr([side(r.cp),`${r.total}／${r.comparable}`,`${r.positive}／${r.comparable}`,signed(r.medianPct),Object.entries(r.statuses).map(([k,v])=>esc(k)+' '+v).join('；')])))}

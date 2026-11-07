@@ -20,6 +20,19 @@ def sample(label, valid, total, unit, basis):
     return {'label': label, 'valid': valid, 'total': total, 'unit': unit, 'basis': basis}
 
 
+def history_backfill(output, start=None, end=None):
+    ledger = read(output / 'tpex-history-backfill.json')
+    days = [r for r in ledger.get('days', []) if r.get('status') in ('imported', 'partial')
+            and (not start or r['date'] >= start) and (not end or r['date'] <= end)]
+    if not days:
+        return None
+    return {'market': 'TPEX', 'dates': [r['date'] for r in days], 'days': len(days),
+            'quoteRows': sum(r['counts'].get('acceptedQuoteRows', 0) for r in days),
+            'tradedRows': sum(r['counts'].get('tradedQuoteRows', 0) for r in days),
+            'sourcePath': 'tpex-history-backfill.json', 'status': ledger.get('status'),
+            'basis': '櫃買中心免費歷史行情：權證成交價、成交量、同日標的收盤。資料是事後補入；歷史履約條款與完整分點仍未取得，不視為當時已知訊號。'}
+
+
 def daily_report(output):
     folder = output / 'daily-reports/warrant-journal'
     index = read(folder / 'index.json')
@@ -166,6 +179,8 @@ def quality_html(report):
     missing = ''.join(f"<tr><td>{esc(r['label'])}</td><td>{r['count']:,} {esc(r['unit'])}</td><td>{esc(r['basis'])}</td></tr>" for r in q['missing'])
     issues = '；'.join(f'{k} {v}' for k, v in q.get('branchIssues', {}).items())
     review = report.get('strategyReview')
+    imported = report.get('historyBackfill')
+    import_note = f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else ''
     strategy = '<h3>本月策略檢查</h3><p>' + esc(review['message']) + '</p>' if review else ''
     if review and review.get('accounts'):
         strategy += '<div class="scroll"><table><tr><th>策略</th><th>完成交易</th><th>自啟用報酬%</th><th>最大回撤%</th><th>樣本狀態</th></tr>' + ''.join(
@@ -175,7 +190,7 @@ def quality_html(report):
     if follow:
         tracking = '<h3>先前觀察清單後續</h3><p>' + esc(follow['message']) + '</p><div class="scroll"><table><tr><th>來源模式／觀察期</th><th>到期觀察</th><th>權證／現股可比較</th><th>權證／現股漲跌中位數%</th></tr>' + ''.join(
             f'<tr><td>{esc(r["label"])}／{r["horizon"]} 日</td><td>{r["total"]}</td><td>{r["warrantSamples"]}／{r["stockSamples"]}</td><td>{esc(round(r["warrantMedianPct"],2) if r["warrantMedianPct"] is not None else "—")}／{esc(round(r["stockMedianPct"],2) if r["stockMedianPct"] is not None else "—")}</td></tr>' for r in follow['rows']) + '</table></div>'
-    return f'<section><h2>資料範圍、缺漏與有效樣本數</h2><p>{esc(q["scope"])}</p><h3>有效樣本（各項分開計算）</h3><div class="scroll"><table><tr><th>統計</th><th>有效／候選</th><th>定義</th></tr>{samples}</table></div><h3>缺漏與排除</h3><div class="scroll"><table><tr><th>項目</th><th>數量</th><th>說明</th></tr>{missing}</table></div><p>{esc(issues)}</p><ul>' + ''.join('<li>' + esc(t) + '</li>' for t in q['notes']) + f'</ul>{tracking}{strategy}</section>'
+    return f'<section><h2>資料範圍、缺漏與有效樣本數</h2>{import_note}<p>{esc(q["scope"])}</p><h3>有效樣本（各項分開計算）</h3><div class="scroll"><table><tr><th>統計</th><th>有效／候選</th><th>定義</th></tr>{samples}</table></div><h3>缺漏與排除</h3><div class="scroll"><table><tr><th>項目</th><th>數量</th><th>說明</th></tr>{missing}</table></div><p>{esc(issues)}</p><ul>' + ''.join('<li>' + esc(t) + '</li>' for t in q['notes']) + f'</ul>{tracking}{strategy}</section>'
 
 
 def daily_html(report):
