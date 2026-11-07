@@ -243,8 +243,8 @@
     },
     {
       "path": "automation/derivatives/warrant_lab_reports.py",
-      "bytes": 14283,
-      "sha256": "5e4a8e5b5e64f8c2795c86b99556347f68cfe51f19a98052c163678a2944c82c"
+      "bytes": 15219,
+      "sha256": "9029dece239c429157007f285975ed61783393902bc259634c33c536746ea8af"
     },
     {
       "path": "automation/derivatives/warrant_spreads.py",
