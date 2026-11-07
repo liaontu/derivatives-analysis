@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 4362,
-      "sha256": "fd9bc1217ea7b38fa57a2e118f219a1643ada78083b3865f69368874536f8984"
+      "bytes": 4705,
+      "sha256": "17aaa963ddb518c5937662f935cfff24aeb41ae1caabbc1dd4a06355893a94cc"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -43,13 +43,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 9098,
-      "sha256": "068ea2be11507ab8ef6da4cac5f866d17959ad0380384b2b6f73612dfeaf0bda"
+      "bytes": 9793,
+      "sha256": "558fd68322e790c12ae93b759145487ac553e9b53d7afad90826a39a44d0e5ea"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 51306,
-      "sha256": "98fee20aca359be91ed5277d55cea0ce07ed3bce70133e7192b4270c3cd88a71"
+      "bytes": 51918,
+      "sha256": "052548f187e9c57f8f4680c674b8b6114f4293f088ac67e6646daf582868a727"
     },
     {
       "path": "assets/branches.mjs",
@@ -100,6 +100,11 @@
       "path": "assets/model.mjs",
       "bytes": 7247,
       "sha256": "6276a9f4317820585df11f6cc5d66feaf39404eb30661988e4379569ebf08879"
+    },
+    {
+      "path": "assets/option-history.mjs",
+      "bytes": 15619,
+      "sha256": "07afc7bf3d2ab386b45f42c3f8b6db92611f9a5ad6c53562d0203f64dc8fb960"
     },
     {
       "path": "assets/series-reports.mjs",
@@ -202,6 +207,11 @@
       "sha256": "7ba4162bb2881538fd88134d0c254f4b307d72dcb0e50d24258638502358429f"
     },
     {
+      "path": "automation/derivatives/option_history.py",
+      "bytes": 16821,
+      "sha256": "05d1d937ae62de81ff04e4022da781db4b0819f041646566484dadf8488e4f12"
+    },
+    {
       "path": "automation/derivatives/publication.py",
       "bytes": 461,
       "sha256": "334e92661f46813b99ba5bfb90b9ee11868d795eb07e42cc6e7e5c75cc9fb335"
@@ -298,8 +308,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3896,
-      "sha256": "05650089b941a5a7f4b7ddf99c7b65bf24d805f4ab3dbc131a393e2d7434be95"
+      "bytes": 3993,
+      "sha256": "3382874348d25efad8c4cc1d396f8bcb901c92940e94983e95693b86ca28d3fa"
     }
   ]
 }
