@@ -213,7 +213,9 @@ function quotePanel(payload, kind) {
 async function warrants() {
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   const target = params.get('underlying'), full = !params.has('underlying') && params.get('all') === 'full';
-  const data = await loadWarrants(load, {underlying: target || '', all: full, preview: target === null && !full});
+  const requestGeneration=generation;
+  const data = await loadWarrants(load, {underlying: target || '', all: full, preview: target === null && !full,
+    onProgress:(done,total)=>{if(requestGeneration===generation)$('#content').textContent=`載入全市場權證：${done}／${total} 個標的（${Math.round(done/Math.max(1,total)*100)}%）。完成後可搜尋、排序與匯出。`;}});
   if (target !== null && !data.choices.some(r => r.code === target)) {
     exportRows = [];
     return empty('找不到此標的：' + (target || '（空白）')) + '<p>請確認標的代碼，或<a class="text-link" href="#warrants">返回權證篩選</a>。</p>';

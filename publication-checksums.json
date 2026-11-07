@@ -48,8 +48,8 @@
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 53541,
-      "sha256": "38eebfb4fa1907c67bfe0c3b465e5b564abc30b937417283094c43c6816f9be4"
+      "bytes": 53817,
+      "sha256": "9559e53147cf69669259c89b09d27b71a43c1d8d2e994dab0bd8fbeba9c2e91e"
     },
     {
       "path": "assets/branches.mjs",
@@ -58,8 +58,8 @@
     },
     {
       "path": "assets/catalog.mjs",
-      "bytes": 2006,
-      "sha256": "ccef60e5a03d612234968e0a617a64f56a5e9916584d7d830216d74d44e6ee26"
+      "bytes": 2124,
+      "sha256": "1b8e4aedadba3b5acc22824efb3c184498ae7bb82c1d2573d4dc830269858916"
     },
     {
       "path": "assets/daily-reports.mjs",
