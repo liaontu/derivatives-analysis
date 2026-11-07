@@ -9,7 +9,23 @@ export async function loadWarrants(load, {underlying = '', code = '', all = fals
   }
   const choices = index.items;
   if (preview) return {...await load('warrants-preview'), choices, underlying: '', preview: true};
-  if (all) return {...await load('warrants'), choices, underlying: ''};
+  if (all) {
+    if(index.schemaVersion!==3)return {...await load('warrants'),choices,underlying:''};
+    // Explicit full-market requests only; limit concurrent shard downloads.
+    const parts=new Array(choices.length); let next=0;
+    await Promise.all(Array.from({length:6},async()=>{
+      while(next<choices.length) {
+        const n=next++, item=choices[n];
+        if(!/^[A-Za-z0-9_-]{1,24}$/.test(item.code)) throw Error('Invalid warrant shard');
+        const part=await load(`warrants-by-underlying/${item.code}`);
+        if(!Array.isArray(part.rows)||part.rows.length!==item.count||part.rows.some(r=>r.underlying!==item.code)) throw Error('Incomplete warrant shard');
+        parts[n]=part.rows;
+      }
+    }));
+    const rows=parts.flat();
+    if(rows.length!==index.count||new Set(rows.map(r=>`${r.market}:${r.code}`)).size!==rows.length)throw Error('Warrant catalogue count or identity mismatch');
+    return {rows,choices,underlying:''};
+  }
   if (code) underlying = (await load('warrant-code-index')).codes?.[code] || '';
   else if (!underlying) underlying = choices.find(r => r.code === '2330')?.code || choices[0]?.code || '';
   if (!/^[A-Za-z0-9_-]{1,24}$/.test(underlying) || !choices.some(r => r.code === underlying)) return {rows: [], choices, underlying};

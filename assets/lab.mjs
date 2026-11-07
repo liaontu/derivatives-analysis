@@ -10,7 +10,7 @@ export function accountStats(account, initial) {
     peak = Math.max(peak, p.equity);
     drawdown = Math.max(drawdown, (1 - p.equity / peak) * 100);
   }
-  return { equity, returnPct: finite(equity) ? (equity / initial - 1) * 100 : null, drawdown,
+  return { equity, returnPct: account.curve.length && finite(equity) ? (equity / initial - 1) * 100 : null, drawdown:account.curve.length?drawdown:null,
     realized: account.trades.reduce((sum, t) => sum + t.pnl, 0),
     winRate: account.trades.length ? account.trades.filter(t => t.pnl > 0).length / account.trades.length * 100 : null };
 }
@@ -52,6 +52,8 @@ export function createWarrantLab(deps) {
   return {
     async page() {
       const versions=await deps.load('warrant-lab-versions').catch(()=>null);
+      const requested=new URLSearchParams(location.hash.split('?')[1]).get('mode');
+      if(requested==='research'||requested==='forward')mode=requested;
       const choices=['forward',...(versions?.research?['research']:[]),...(versions?.archives||[])];
       if(!choices.includes(mode))mode='forward';
       const path=mode==='forward'?'warrant-lab':mode==='research'?'warrant-lab-research':'warrant-lab-archives/'+mode;
@@ -60,10 +62,13 @@ export function createWarrantLab(deps) {
       report = loaded[0]; const index = loaded[1];
       const id = selectedReport || index?.latest;
       const observation = validReportId(id) && index?.items?.some(i => i.id === id) ? await deps.load(`warrant-lab-reports/${id}`).catch(() => null) : null;
-      return picker + (mode==='forward'?reportContent(index, observation, selectedReport, deps):'') + labContent(report, selected, deps).replace('data/derivatives/warrant-lab.json','data/derivatives/'+path+'.json');
+      const research=mode==='research'?report:versions?.research?await deps.load('warrant-lab-research').catch(()=>null):null;
+      const progress=`<p class="notice">歷史重放已核對 ${fmt(research?.dayCount||0)} 個交易日（${esc(research?.startedOn||'尚無')}～${esc(research?.lastMarketDate||'尚無')}），<a href="#warrant-lab?mode=research">查看研究帳戶</a>；<a href="#warrant-lab?mode=forward">前瞻帳戶</a>從啟用後累積。空曲線表示尚無新行情，不列為零報酬。每日都可出觀察報告，滿 61 個有效日期才進行策略評審。</p>`;
+      const researchDownload=mode==='research'?'<p><a href="data/derivatives/warrant-lab-research-report.html" target="_blank" rel="noopener">開啟歷史研究報告</a> · <a href="data/derivatives/warrant-lab-research-report.json" download>下載研究報告 JSON</a></p>':'';
+      return picker + progress + researchDownload + labContent(report, selected, deps).replace('data/derivatives/warrant-lab.json','data/derivatives/'+path+'.json') + (mode==='forward'?'<details><summary>每日策略觀察報告、版本與下載</summary>'+reportContent(index, observation, selectedReport, deps)+'</details>':'');
     },
     bind(render) {
-      document.querySelector('#lab-mode')?.addEventListener('change',e=>{mode=e.target.value;render();});
+      document.querySelector('#lab-mode')?.addEventListener('change',e=>{mode=e.target.value;history.replaceState(null,'','#warrant-lab');render();});
       document.querySelector('#lab-report-id')?.addEventListener('change', e => { selectedReport = e.target.value; render(); });
       document.querySelector('#lab-account')?.addEventListener('change', e => { selected = e.target.value; render(); });
       document.querySelector('#lab-export')?.addEventListener('click', () => {

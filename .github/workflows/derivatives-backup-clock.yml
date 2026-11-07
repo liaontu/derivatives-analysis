@@ -2,7 +2,14 @@ name: derivatives-backup-clock
 on:
   schedule:
     - cron: '47 5,15 * * *'
+    # Taipei 16:30 / 18:30 / 20:30: bounded recovery after local close.
+    - cron: '30 8,10,12 * * 1-5'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only inspect recovery decisions; do not dispatch collectors'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: write
@@ -21,4 +28,5 @@ jobs:
       - name: Dispatch only missing collection windows
         env:
           GH_TOKEN: ${{ github.token }}
+          RECOVERY_DRY_RUN: ${{ inputs.dry_run || false }}
         run: python automation/derivatives/cloud_recovery.py

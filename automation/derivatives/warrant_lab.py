@@ -362,6 +362,17 @@ def collect_lab(output, warrants, feeds, now, today, read, save, focus=None):
     if focus is None:
         focus = read(output / 'warrant-focus.json') or {}
     result = build_lab(old, warrants, feeds, focus, now, today, load_calendar(output))
+    if result.get('journal') and result['journal'][-1].get('marketDate') == today.isoformat():
+        try:
+            from .research_inputs import record_input
+        except ImportError:
+            from research_inputs import record_input
+        entry = result['journal'][-1]
+        # Only archive this exact run's input; an unchanged ledger may refer to an earlier revision.
+        quoted = [r for r in warrants if r.get('market') == 'TWSE']
+        focused = [r for r in focus.get('items',[]) if r.get('market') == 'TWSE' and r.get('date') == today.isoformat()]
+        if digest({'warrants':quoted,'focus':focused,'sources':result['sources']}) == entry['inputSha256']:
+            record_input(output,entry,quoted,focused,result['sources'])
     if old and old.get('rules', {}).get('version') in ('warrant-paper-v1','warrant-paper-v2'):
         archive = output / 'warrant-lab-archives' / (old['rules']['version']+'.json')
         existing = read(archive)

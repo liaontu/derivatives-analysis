@@ -21,7 +21,14 @@ POSITION_SOURCES = ('futures-institutional', 'options-institutional', 'futures-l
 
 
 def read(path):
-    return json.loads(path.read_text(encoding='utf-8'))
+    value = json.loads(path.read_text(encoding='utf-8'))
+    if path.name == 'warrants.json' and value.get('format') == 'underlying-shards':
+        if __package__:
+            from .warrant_catalog import read_warrants
+        else:
+            from warrant_catalog import read_warrants
+        return read_warrants(path.parent, read)
+    return value
 
 
 def save(path, data):

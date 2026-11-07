@@ -33,6 +33,20 @@ def history_backfill(output, start=None, end=None):
             'basis': '櫃買中心免費歷史行情：權證成交價、成交量、同日標的收盤。資料是事後補入；歷史履約條款與完整分點仍未取得，不視為當時已知訊號。'}
 
 
+def institutional_review(output, start, end):
+    index=read(output/'stock-institutional.json')
+    if not index:return None
+    dates=[d for d in index.get('dates',[]) if start<=d<=end]
+    samples=paired=0
+    for day in dates:
+        snapshot=read(output/'stock-institutional'/(day+'.json'))
+        if snapshot.get('date')!=day or snapshot.get('status')!='ok':raise ValueError('Institutional report date mismatch')
+        samples+=len(snapshot['rows'])
+        paired+=sum(finite(r.get('stockPct')) and finite(r.get('volumeEligible')) and r['volumeEligible']>0 for r in snapshot['rows'])
+    return {'dates':dates,'days':len(dates),'stockDaySamples':samples,'pairedStockDaySamples':paired,
+            'message':'僅計本期保存的法人股數，與同日現股及權證量價配對；未收錄日期不補零。串接前的月份尚無法人歷史，不套用後來資料。分點與法人分類無法識別同一投資人。'}
+
+
 def daily_report(output):
     folder = output / 'daily-reports/warrant-journal'
     index = read(folder / 'index.json')
@@ -77,6 +91,7 @@ def daily_report(output):
         'observations': observations, 'limitations': report['limits'] + [
             '生成時間與行情日期分開顯示；休市或沒有新資料不產生新的行情日。',
             '日報為固定規則自動整理，不呼叫付費 AI。分點補齊會另存同日版本。'],
+        'institutionalReview': institutional_review(output,day,day),
     }
 
 
@@ -180,7 +195,9 @@ def quality_html(report):
     issues = '；'.join(f'{k} {v}' for k, v in q.get('branchIssues', {}).items())
     review = report.get('strategyReview')
     imported = report.get('historyBackfill')
-    import_note = f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else ''
+    institutional = report.get('institutionalReview')
+    institution_note = (f'<p>本期現股法人：{institutional["days"]} 個資料日、{institutional["stockDaySamples"]:,} 個股日；其中 {institutional["pairedStockDaySamples"]:,} 個股日可與同日股證量價比較。{esc(institutional["message"])}</p>' if institutional else '')
+    import_note = (f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else '') + institution_note
     strategy = '<h3>本月策略檢查</h3><p>' + esc(review['message']) + '</p>' if review else ''
     if review and review.get('accounts'):
         strategy += '<div class="scroll"><table><tr><th>策略</th><th>完成交易</th><th>自啟用報酬%</th><th>最大回撤%</th><th>樣本狀態</th></tr>' + ''.join(

@@ -18,11 +18,11 @@ from statistics import median
 if __package__:
     from .publication import save_text
     from .trading_calendar import load_calendar
-    from .report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill
+    from .report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill, institutional_review
 else:
     from publication import save_text
     from trading_calendar import load_calendar
-    from report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill
+    from report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review, history_backfill, institutional_review
 
 RULES = {'version': 'warrant-series-v2', 'liquidShare': 0.8, 'liquidMinDays': 3, 'minPairs': 10,
          'topUnderlyings': 30, 'topWarrants': 5,
@@ -266,6 +266,7 @@ def build_report(output, kind, start, end):
     report['quality'] = period_quality(report, universe)
     report['followupReview'] = followup_review(output, start_key, end_key)
     report['historyBackfill'] = history_backfill(output, start_key, end_key)
+    report['institutionalReview'] = institutional_review(output, start_key, end_key)
     report['status'] = 'partial' if market['missingDays'] else 'ok' if market['dataDays'] else 'missing'
     if kind == 'monthly':
         report['strategyReview'] = strategy_review(output, end_key)
@@ -561,6 +562,22 @@ def archive(output, content, now):
     latest_item = next((i for i in index['items'] if i['id'] == index['latest'].get(content['kind'])), None)
     if not latest_item or latest_item['periodEnd'] <= content['period']['end']:
         index['latest'][content['kind']] = report['id']
+    # Only enrich the index: immutable report bytes and hashes stay unchanged.
+    latest_period, prior_rules = {}, {}
+    for item in index['items']:
+        saved = read_json(folder / (item['id'] + '.json'))
+        item['status'] = saved.get('status', 'unknown')
+        item['rulesVersion'] = saved.get('rules', {}).get('version', 'unknown')
+        key = (item['kind'], item['periodEnd'])
+        item['revisionReason'] = ('首次報告' if key not in prior_rules else
+                                  '規則升版' if prior_rules[key] != item['rulesVersion'] else '資料補齊或修訂')
+        prior_rules[key] = item['rulesVersion']
+        latest_period[key] = item
+    active_rules = {kind: next(i['rulesVersion'] for i in index['items'] if i['id'] == rid)
+                    for kind, rid in index['latest'].items()}
+    for item in index['items']:
+        item['archiveState'] = ('archived-rules' if item['rulesVersion'] != active_rules[item['kind']] else
+                                'current' if latest_period[(item['kind'], item['periodEnd'])]['id'] == item['id'] else 'superseded')
     index.setdefault('errors', {}).pop(content['kind'], None)
     index.update(status='retained' if index['errors'] else 'ok', error='; '.join(index['errors'].values()) or None)
     save_json(path, index)

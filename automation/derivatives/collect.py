@@ -251,7 +251,14 @@ FEED_KEYS = ("date", "fetchedAt", "rows", "history", "provenance")
 
 def read(path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if path.name == 'warrants.json' and value.get('format') == 'underlying-shards':
+            if __package__:
+                from .warrant_catalog import read_warrants
+            else:
+                from warrant_catalog import read_warrants
+            return read_warrants(path.parent, read)
+        return value
     except FileNotFoundError:
         return None
 
@@ -390,9 +397,10 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
                 statuses[-1].update(staleAfterTradingDays=4, freshnessBasis='TW trading days')
             print(json.dumps({"feed": name, "date": stored["date"], "status": status, "count": len(stored["rows"]), "error": error}, ensure_ascii=False))
     warrants = combine_warrants(feeds)
-    save(output / "warrants.json", {"rows": warrants})
     archive(output, warrants, feeds, now, today, read, save)
     publish_catalog(output, warrants, save, read)
+    save(output / 'warrants.json', {'schemaVersion': 2, 'format': 'underlying-shards',
+                                  'catalog': 'warrant-catalog.json', 'count': len(warrants)})
     try:
         collect_spreads(output, warrants, feeds, now, today, read, save)
     except Exception as exc:
@@ -423,7 +431,7 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
         errors.append('warrant-lab-reports')
         print(json.dumps({'feed': 'warrant-lab-reports', 'status': 'retained', 'error': type(exc).__name__}))
     manifest = {"schemaVersion": 6, "sources": statuses, "warrantCount": len(warrants), "calendarStatus": calendar_status,
-                "schedule": "預定台北 08:23、11:23，以及 18:23 至 23:23 每小時檢查；可能延遲或漏跑，內容未變動不重新發布"}
+                "schedule": "台北 08:23、11:23、16:23、18:23、20:23、22:23 檢查；16:30、18:30、20:30 及夜間有限補跑。各來源發布時間不同，排程可能延遲；內容未變動不重寫行情。"}
     collect_quality(output, manifest, read, save, today, now, calendar=calendar)
     # An unchanged rerun leaves every file, including the manifest, byte-identical.
     save(output / "manifest.json", stamp(manifest, old_manifest, now))

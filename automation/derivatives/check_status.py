@@ -11,6 +11,7 @@ ARTIFACTS = {
     'reports': ['daily-reports/warrant-volume/index.json', 'daily-reports/positioning/index.json'],
     'journal': ['daily-reports/warrant-journal/index.json'],
     'tpex_history': ['tpex-history-backfill.json'],
+    'stock_institutional': ['stock-institutional.json'],
     'relationship': ['warrant-relationship/index.json'], 'signal_backtest': ['warrant-signal-backtest/outcomes.json'],
     'branches': ['warrant-branches.json'], 'coverage': ['stock-warrant-coverage.json'],
     'series': ['warrant-series-reports.json'], 'lab': ['warrant-lab.json'],
@@ -62,6 +63,11 @@ def record(output, kind, outcomes, run_id, now=None):
         data_date = data.get('asOf') or data.get('latest') or data.get('end') or data.get('lastMarketDate') or data.get('date') or (dates[-1] if dates else None)
         if data_date is not None and not isinstance(data_date, str):
             data_date = max((r.get('dataThrough') or '' for r in data.get('items', [])), default='') or None
+        if key=='branches':
+            rank_dates=sorted(r['date'] for r in data.get('items',[]) if r.get('date'))
+            data_date=(rank_dates[0] if rank_dates[0]==rank_dates[-1] else rank_dates[0]+'～'+rank_dates[-1]) if rank_dates else None
+        if key=='coverage':
+            data_date=data.get('directoryDay')
         if key == 'lab_reports' and data.get('latest'):
             item = next((r for r in data.get('items', []) if r.get('id') == data['latest']), {})
             data_date = item.get('date')+'（報告日）' if item.get('date') else None
@@ -77,6 +83,12 @@ def record(output, kind, outcomes, run_id, now=None):
         payload['publication'] = old['publication']
     output.mkdir(exist_ok=True, parents=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf8')
+    if kind in ('market', 'branches'):
+        try:
+            from .update_health import record as record_freshness
+        except ImportError:
+            from update_health import record as record_freshness
+        record_freshness(output, datetime.fromisoformat(now))
     return payload
 
 

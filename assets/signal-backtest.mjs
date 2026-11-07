@@ -68,7 +68,7 @@ export function createSignalBacktest({load,table,tr,select,metric}) {
       <p>啟用時間：${esc(taipeiTime(data.activatedAt))}。${state.mode==='research'?'這些資料是事後重建或遲到資料，不能當成當時已發出的交易訊號。':'只有啟用後的新資料日、且基準日開盤前封存的線索才列在此；產生時間不是已驗證的上線或成交時間。'}</p>
       <p>現股價格可獨立追蹤，不因權證缺成交價而消失。漲跌為未還原收盤變動，沒有扣除手續費、稅、滑價與買賣價差。</p>
       <p><a href="#warrant-relationship">近月價量與原始線索 →</a> · <a href="#warrant-report">每日追蹤報告 →</a></p></section>
-      <section class="panel"><h2>目前哪些線索較有參考價值？</h2><p>${summaries.some(s=>s.enough)?'部分分類已達最低資料門檻，可繼續做前瞻驗證；這仍不是預測力或扣費後獲利的證明。':'目前所選分類尚未達最低資料門檻，不能可靠評選最佳訊號。下方先呈現實際漲跌與缺值，繼續累積。'}</p><p class="note">最低門檻：每組30筆完整代表樣本、10個訊號日期、已到觀察日樣本完整率70%。沒有無訊號對照組；市場整體漲跌、槓桿與天期差異仍可能主導結果。</p></section>
+      <section class="panel mobile-secondary" data-mobile-label="樣本資格與限制：未達門檻不可評選策略"><h2>目前哪些線索較有參考價值？</h2><p>${summaries.some(s=>s.enough)?'部分分類已達最低資料門檻，可繼續做前瞻驗證；這仍不是預測力或扣費後獲利的證明。':'目前所選分類尚未達最低資料門檻，不能可靠評選最佳訊號。下方先呈現實際漲跌與缺值，繼續累積。'}</p><p class="note">最低門檻：每組30筆完整代表樣本、10個訊號日期、已到觀察日樣本完整率70%。沒有無訊號對照組；市場整體漲跌、槓桿與天期差異仍可能主導結果。</p></section>
       <section aria-label="全市場分類結果"><h2>全市場分類比較 · 基準後 ${esc(state.horizon)} 日</h2>${summaries.map(card).join('')||'<p class="empty">此來源模式尚無符合固定門檻的線索；不以歷史回填充作啟用後紀錄。</p>'}</section>
       <section class="panel"><div class="panel-head"><div><h2>逐筆追蹤與證據</h2><p>以下搜尋只篩選明細；上方保持全市場分類比較。</p></div><button id="signal-export">匯出明細 CSV</button></div>
       <form id="signal-search" class="filters"><label>個股／權證／分點<input name="query" value="${esc(state.query)}" placeholder="例如 3583、元大、061455"></label><button>搜尋</button>${select('signal-scope','樣本範圍',['representative','all'],state.scope,v=>v==='representative'?'納入統計的代表樣本':'全部線索（含重疊）')}<button id="signal-reset" type="button">清除搜尋</button></form>

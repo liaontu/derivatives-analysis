@@ -64,8 +64,8 @@ def build_observation(lab, report_date):
                          'startedOn': lab.get('accountStartedOn', {}).get(key, lab['startedOn']),
                          'observations': len(curve), 'asOf': last['date'] if last else None,
                          'equity': equity, 'cash': acc['cash'], 'dailyChange': daily_change,
-                         'returnPct': (equity / lab['rules']['initialCash'] - 1) * 100 if equity is not None else None,
-                         'maxDrawdownPct': drawdown(curve) * 100 if all(p['equity'] is not None for p in curve) else None,
+                         'returnPct': (equity / lab['rules']['initialCash'] - 1) * 100 if equity is not None and curve else None,
+                         'maxDrawdownPct': drawdown(curve) * 100 if curve and all(p['equity'] is not None for p in curve) else None,
                          'realizedPnl': money(sum(t['pnl'] for t in trades)),
                          'stressPnl': money(sum(t['stressPnl'] for t in trades)) if trades else None,
                          'closed': len(trades), 'winRate': sum(t['pnl'] > 0 for t in trades) / len(trades) * 100 if trades else None,
@@ -120,6 +120,17 @@ def report_html(report):
 
 
 def collect_reports(output, now, today, read, save):
+    research = read(output / 'warrant-lab-research.json')
+    if research and research.get('lastMarketDate'):
+        validate(research)
+        snapshot = build_observation(research, research['lastMarketDate'])
+        snapshot.update(mode='research', replayEvidence=research.get('replayEvidence'))
+        snapshot['observations'].insert(0, '歷史重放研究；不是當時執行的交易，不納入前瞻績效或策略升級。')
+        content_hash = digest(snapshot)
+        snapshot.update(id='research-'+research['lastMarketDate']+'-'+content_hash[:8], contentSha256=content_hash,
+                        generatedAt=research.get('generatedAt') or research['createdAt'])
+        save(output / 'warrant-lab-research-report.json', snapshot)
+        save_text(output / 'warrant-lab-research-report.html', report_html(snapshot))
     lab = read(output / 'warrant-lab.json')
     if not lab or not lab.get('accounts'):
         raise ValueError('Paper ledger unavailable')

@@ -175,7 +175,7 @@ def leg(row):
     bid, ask = positive(row.get('bid')), positive(row.get('ask'))
     if bid and ask and bid > ask:
         bid = ask = None
-    return {'last': last, 'volume': volume, 'bid': bid, 'ask': ask}
+    return {'last': last, 'volume': volume, 'oi': row.get('oi'), 'bid': bid, 'ask': ask}
 
 
 def build(output, options, contracts, stock_quotes=None):

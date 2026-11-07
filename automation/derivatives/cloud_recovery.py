@@ -10,12 +10,16 @@ except ImportError:
 
 def window(now, branch):
     local = now.astimezone(TAIPEI)
+    # Separate afternoon windows: a morning check cannot suppress a close check.
+    if not branch and 16 * 60 + 30 <= local.hour * 60 + local.minute < 23 * 60:
+        slot = max(h for h in (16, 18, 20) if local.hour * 60 + local.minute >= h * 60 + 30)
+        return local.replace(hour=slot, minute=0, second=0, microsecond=0)
     if local.hour >= 23 or local.hour < 8:
         day = local.date() - timedelta(days=local.hour < 8)
         if branch and day.weekday() >= 5:
             return None
         return datetime.combine(day, datetime.min.time(), TAIPEI) + timedelta(hours=21 if branch else 22)
-    if not branch and 12 <= local.hour < 18:
+    if not branch and 12 <= local.hour < 16:
         return local.replace(hour=8, minute=0, second=0, microsecond=0)
     return None
 
@@ -41,8 +45,10 @@ def main():
         history = read_api(f'actions/workflows/{name}/runs?branch=main&per_page=30')['workflow_runs'] if since else []
         action = decision(history, since)
         print(name, since, action, flush=True)
-        if action == 'dispatch':
+        if action == 'dispatch' and os.environ.get('RECOVERY_DRY_RUN') != 'true':
             subprocess.run(['gh', 'workflow', 'run', name, '--repo', REPO, '--ref', 'main'], check=True, timeout=30)
+        elif action == 'dispatch':
+            print('dry-run: collector dispatch omitted', flush=True)
 
 
 if __name__ == '__main__':

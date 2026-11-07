@@ -4,6 +4,12 @@ const difference = (a, b) => finite(a) && finite(b) ? a - b : null;
 const signed = v => finite(v) ? (v > 0 ? '+' : '') + fmt(v, 2) : '—';
 const series = row => row.month + '/' + row.strike;
 
+export function visibleContracts(rows,{view='activity',all=false,sort='volume'}={}) {
+  const sum=(r,key)=>(r.C?.[key]||0)+(r.P?.[key]||0);
+  return rows.filter(r=>all || (view==='parity'?finite(r.close):sum(r,'volume')>0||sum(r,'oi')>0))
+    .slice().sort((a,b)=>sum(b,sort)-sum(a,sort)||sum(b,'volume')-sum(a,'volume')||a.month.localeCompare(b.month)||a.strike-b.strike);
+}
+
 export function compare(row, stock) {
   const gap = (call, put, stockPrice) => finite(call) && finite(put) && finite(stockPrice)
     ? row.strike + call - put - stockPrice : null;
@@ -28,7 +34,7 @@ function fields() {
 }
 
 export function createStockOptions({load, table, tr, select, metric}) {
-  const state = {day: '', symbol: 'CDO', all: false, selected: ''};
+  const state = {day: '', symbol: '', all: false, selected: '', view: 'activity', sort: 'volume'};
   let activeRow;
   async function page() {
     const index = await load('stock-option-watch');
@@ -41,15 +47,16 @@ export function createStockOptions({load, table, tr, select, metric}) {
     const marketPairs = Object.values(now.stocks).flatMap(s => s.pairs.map(pair => compare(pair, s)));
     const marketPriced = marketPairs.filter(p => finite(p.close)).length;
     const marketQuoted = marketPairs.filter(p => finite(p.buySynthetic) || finite(p.sellSynthetic)).length;
-    if (!now.stocks[state.symbol]) state.symbol = symbols[0];
+    if (!now.stocks[state.symbol]) state.symbol = symbols.slice().sort((a,b)=>
+      now.stocks[b].pairs.reduce((n,r)=>n+(r.C?.volume||0)+(r.P?.volume||0),0)-
+      now.stocks[a].pairs.reduce((n,r)=>n+(r.C?.volume||0)+(r.P?.volume||0),0))[0];
     const stock = now.stocks[state.symbol], prior = prev?.stocks[state.symbol];
     const previous = new Map((prior?.code === stock.code ? prior.pairs : []).map(r => [series(r), r]));
     const spot = stock.spot;
     const label = s => now.stocks[s].code + ' ' + now.stocks[s].name + ' · ' + s;
     const rows = stock.pairs.map(r => ({...r, ...compare(r, stock)}));
     const observed = rows.filter(r => finite(r.close));
-    const choices = (state.all ? rows : observed).slice().sort((a, b) =>
-      (Math.abs(b.close ?? 0) - Math.abs(a.close ?? 0)) || a.month.localeCompare(b.month) || a.strike - b.strike);
+    const choices = visibleContracts(rows,state);
     activeRow = choices.find(r => series(r) === state.selected) || choices[0];
     const optionChange = (r, priorRow, side) => signed(difference(r[side]?.last, priorRow?.[side]?.last));
     const rowHtml = r => {
@@ -57,11 +64,12 @@ export function createStockOptions({load, table, tr, select, metric}) {
       return tr([esc(r.month) + '<small>履約價 ' + fmt(r.strike, 2) + '</small>',
         fmt(r.C?.last, 2) + '<small>變動 ' + optionChange(r, old, 'C') + '</small>',
         fmt(r.P?.last, 2) + '<small>變動 ' + optionChange(r, old, 'P') + '</small>',
+        fmt(r.C?.oi) + '／' + fmt(r.P?.oi),
         fmt(r.C?.volume) + '／' + fmt(r.P?.volume), signed(r.close),
         signed(difference(r.close, old && compare(old, prior).close)),
         signed(r.sellSynthetic), signed(r.buySynthetic)]);
     };
-    const calc = activeRow ? `<section class="panel"><h2>一組契約的成本情境</h2>
+    const calc = activeRow && (finite(activeRow.buySynthetic)||finite(activeRow.sellSynthetic)) ? `<section class="panel"><h2>一組契約的成本情境</h2>
       <div class="filters">${select('so-series','到期別／履約價',choices.map(series),series(activeRow))}</div>
       <p>每組使用同一履約價的買權、賣權各一口與 2,000 股現股。賣合成採買權買價、賣權賣價與現股賣價。買合成採買權賣價、賣權買價與現股買價。兩個方向請分別填入適用的成本。</p>
       <form id="so-form"><div class="filters"><label>方向<select name="direction"><option value="sell">賣合成、買現股</option><option value="buy">買合成、賣空現股</option></select></label>${fields()}</div>
@@ -69,20 +77,23 @@ export function createStockOptions({load, table, tr, select, metric}) {
       <p aria-live="polite" data-so-result></p></form></section>` : '';
     const lastStatus = index.status === 'retained' ? '<p class="notice warning">最近收集失敗，顯示最後一次保存的資料。</p>' : '';
     return `${lastStatus}<section class="panel"><div class="filters">${select('so-symbol','標的',symbols,state.symbol,label)}${select('so-day','行情日期',index.dates.slice().reverse(),day)}
-      <label><input type="checkbox" id="so-all" ${state.all ? 'checked' : ''}>顯示缺成交價的組合</label></div>
+      ${select('so-view','觀察用途',['activity','parity'],state.view,v=>v==='activity'?'成交與未平倉':'兩邊成交價差')}
+      ${select('so-sort','排序',['volume','oi'],state.sort,v=>v==='volume'?'成交量優先':'未平倉優先')}
+      <label><input type="checkbox" id="so-all" ${state.all ? 'checked' : ''}>包含零成交／缺值契約</label></div>
       <p class="coverage">全市場 ${esc(day)} · ${fmt(symbols.length)} 檔標的、${fmt(marketPairs.length)} 組契約；${fmt(marketPriced)} 組可算收盤價差，${fmt(marketQuoted)} 組有至少一個方向的三邊盤末報價。</p>
       <div class="metrics">${metric('現股收盤（元）',fmt(spot,2),stock.name + ' · ' + day)}
       ${metric('現股變動（元）',signed(difference(spot,prior?.code === stock.code ? prior.spot : null)),before ? '與 ' + before + ' 比較' : '等待前一收錄日')}
       ${metric('可算成交價差',fmt(observed.length) + '／' + fmt(rows.length),'當日兩邊均成交且有同日現股價')}
       ${metric('有單向盤末報價',fmt(rows.filter(r => finite(r.buySynthetic) || finite(r.sellSynthetic)).length),'至少一種方向有三邊所需的盤末買賣價')}</div>
       <p>價格變動與價差變動皆比前一收錄日。每股收盤價差＝履約價＋買權成交價－賣權成交價－現股收盤價，採零利率、零淨股息基準。正值表示合成價格較高。</p>
-      ${table(['到期別／履約價','買權收盤／變動','賣權收盤／變動','成交量 C／P（口）','收盤價差（元／股）','價差變動','賣合成報價差','買合成報價差'],choices.map(rowHtml))}
+      <p class="notice">${choices.length ? `目前列出 ${choices.length} 組契約；成交量或未平倉可單獨觀察，缺買權／賣權成交價仍無法計算價差。` : '本標的在目前條件沒有可用契約，請切換「成交與未平倉」或選其他標的。'}${!marketQuoted?' 全市場沒有可核對的三邊盤末報價，成本情境暫不開放。':''}</p>
+      ${table(['到期別／履約價','買權收盤／變動','賣權收盤／變動','未平倉 C／P（口）','成交量 C／P（口）','收盤價差（元／股）','價差變動','賣合成報價差','買合成報價差'],choices.map(rowHtml))}
       </section>${calc}<section class="panel source-list"><h2>資料範圍與結算</h2><p>只查期交所名單的台灣普通股標準契約、一般時段。上市現股優先取證交所同日收盤與最後揭示買賣價。缺少現股報表列時只查同日標的收盤歷史。缺價留白，結算價不代替成交價。歷史日期依目前可核對的標的清單整理。</p>
       <p>股票選擇權為歐式現金結算，到期採現股最後 60 分鐘均價。盤末報價時間可能不同，缺少同步三邊報價、可成交數量、可借券數與結算均價避險成本，成本情境僅供盤後研究。</p>
       <p><a href="${esc(now.roster?.url || index.rosterUrl || 'https://openapi.taifex.com.tw/v1/SSOLists')}">期交所標的清單</a> · <a href="https://openapi.taifex.com.tw/v1/DailyMarketReportOpt">選擇權行情</a> · <a href="${esc(now.spotUrl)}">證交所同日行情</a> · <a href="https://www.taifex.com.tw/cht/2/sSO">交易及結算規格</a> · <a href="data/derivatives/stock-option-watch/${esc(day)}.json">本日觀察資料</a></p></section>`;
   }
   function bind(rerender) {
-    for (const [id, key] of [['so-day','day'],['so-symbol','symbol'],['so-all','all'],['so-series','selected']]) {
+    for (const [id, key] of [['so-day','day'],['so-symbol','symbol'],['so-all','all'],['so-series','selected'],['so-view','view'],['so-sort','sort']]) {
       document.getElementById(id)?.addEventListener('change', event => {
         state[key] = key === 'all' ? event.target.checked : event.target.value;
         if (key !== 'selected') state.selected = '';

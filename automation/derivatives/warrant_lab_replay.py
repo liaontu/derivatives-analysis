@@ -9,10 +9,12 @@ try:
     from . import warrant_lab as lab
     from .daily_reports import read, save
     from .trading_calendar import load_calendar
+    from .research_inputs import load_input, record_input
 except ImportError:
     import warrant_lab as lab
     from daily_reports import read, save
     from trading_calendar import load_calendar
+    from research_inputs import load_input, record_input
 
 
 def git_read(repo, commit, name):
@@ -32,8 +34,14 @@ def replay(repo, output, legacy, now=None):
     lab.validate(legacy)
     now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     targets = {e['marketDate']:e for e in legacy['journal'] if e.get('marketDate')}
-    commits = subprocess.check_output(['git','-C',str(repo),'log','--format=%H','--','data/derivatives/warrant-lab.json'],text=True).splitlines()
     found = {}
+    for day, wanted in targets.items():
+        saved = load_input(output, day, wanted['inputSha256'])
+        if saved:
+            found[day] = ('content-addressed archive', {'rows':saved['warrants']},
+                          {'status':'ok','items':saved['focus'],'sources':saved['sources']}, {'sources':saved['sources']})
+    commits = [] if len(found)==len(targets) else subprocess.check_output(
+        ['git','-C',str(repo),'log','--format=%H','--','data/derivatives/warrant-lab.json'],text=True).splitlines()
     for commit in commits:
         if len(found) == len(targets): break
         try:
@@ -45,6 +53,10 @@ def replay(repo, output, legacy, now=None):
             manifest = git_read(repo,commit,'manifest.json')
             if matched_inputs(targets[day],warrants,focus,manifest):
                 found[day] = (commit,warrants,focus,manifest)
+                feed = {s['id']:s for s in manifest['sources']}
+                sources = [{k:feed.get(s,{}).get(k) for k in ('date','status')} | {'id':s} for s in lab.SOURCES]
+                record_input(output,targets[day],[r for r in warrants['rows'] if r.get('market')=='TWSE'],
+                             [r for r in focus.get('items',[]) if r.get('market')=='TWSE' and r.get('date')==day],sources)
         except (subprocess.CalledProcessError, KeyError, ValueError):
             continue
     dates = sorted(targets)
