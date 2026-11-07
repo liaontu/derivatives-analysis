@@ -208,8 +208,8 @@
     },
     {
       "path": "automation/derivatives/option_history.py",
-      "bytes": 16821,
-      "sha256": "05d1d937ae62de81ff04e4022da781db4b0819f041646566484dadf8488e4f12"
+      "bytes": 17055,
+      "sha256": "6acbe98d14b84862624c9cbd4fa2c300822ffe9105cf1d86164b52a35cdad87e"
     },
     {
       "path": "automation/derivatives/publication.py",

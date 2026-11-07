@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import math
+import os
 from pathlib import Path
 import re
 import time
@@ -268,6 +269,7 @@ def main():
     parser.add_argument('--end', help='Defaults to latest official options snapshot date')
     parser.add_argument('--cache', type=Path, help='Local CSV cache for reproducible initial backfill')
     parser.add_argument('--rebuild-only', action='store_true')
+    parser.add_argument('--refresh-latest', action='store_true', help='Recheck latest source even if fetched today')
     parser.add_argument('--max-windows', type=int, default=2, help='Bounded daily recovery; zero means all windows')
     args = parser.parse_args()
     output = args.data
@@ -290,7 +292,8 @@ def main():
         missing = [d for d in missing if d > b]
     # Refresh most recent report to capture source revisions, at most once per Taipei date.
     today = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
-    if not windows and not any(r['end'] == end and r['fetchedAt'][:10] == today for r in receipts):
+    manual = args.refresh_latest or os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+    if not windows and (manual or not any(r['end'] == end and r['fetchedAt'][:10] == today for r in receipts)):
         windows = [(end, end)]
     if args.max_windows:
         windows = windows[:args.max_windows]
