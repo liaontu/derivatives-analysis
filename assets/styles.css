@@ -98,17 +98,17 @@ tbody tr:hover{background:var(--soft)}
 .chart-legend{display:flex;gap:20px;font-size:.8rem;margin-bottom:12px;color:var(--text-2)}
 .chart-legend span:before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:7px}
 .chart-legend span:nth-child(2):before{background:var(--violet)}
-/* Charts and bars are drawn by scripts with fixed colours; map them onto the palette here. */
-svg line[stroke="#2c4050"]{stroke:var(--grid)}
-svg path[stroke="#77e2d0"]{stroke:var(--accent)}
-svg circle[fill="#77e2d0"],svg rect[fill="#77e2d0"]{fill:var(--accent)}
-svg rect[fill="#b3a2ff"]{fill:var(--violet)}
+/* Chart marks: the scripts emit classes, the palette lives here. */
+.chart .grid{stroke:var(--grid)}
+.chart .series{stroke:var(--accent)}
+.chart .dot,.chart .call{fill:var(--accent)}
+.chart .put{fill:var(--violet)}
 .bar-row{display:grid;grid-template-columns:86px 1fr 84px;gap:12px;align-items:center;margin:16px 0;font-size:.82rem}
 .bar-row strong{text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
 .bar-track{background:#e3ebe5;border-radius:999px;height:8px;overflow:hidden}
 .bar-track span{display:block;background:var(--accent);height:100%;border-radius:999px}
-.bar-track span[style*="#6fd7ac"]{background:var(--down)!important}
-.bar-track span[style*="#ff8e99"]{background:var(--up)!important}
+.bar-track .down{background:var(--down)}
+.bar-track .up{background:var(--up)}
 .section-intro{margin-bottom:22px;color:var(--text-2);font-size:.9rem}
 .source-list a,.text-link{color:var(--accent)}
 .table-wrap td a.text-link{display:inline-block;text-decoration:underline;text-decoration-color:var(--accent-line);text-decoration-thickness:1px;text-underline-offset:4px}

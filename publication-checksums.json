@@ -43,8 +43,8 @@
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 49293,
-      "sha256": "1abff4a7117418c6ce724615eba6c2e07acb1405ac57e9f66684fc9a9e7485d6"
+      "bytes": 49264,
+      "sha256": "2e365accc7ff93a38238ac7332e1d39068e2e4a765f7dd1db290a0af81f1dd35"
     },
     {
       "path": "assets/branches.mjs",
@@ -88,8 +88,8 @@
     },
     {
       "path": "assets/lab.mjs",
-      "bytes": 12456,
-      "sha256": "7a13984896ea91cf90d7af2cd6c36e34585bfce48202e1f6dd28928eecc9aae3"
+      "bytes": 12454,
+      "sha256": "304281d1094bea8d6f08b45bc7e1e6c33f7d6fdbd361992b4de585c95706df5f"
     },
     {
       "path": "assets/model.mjs",
@@ -108,8 +108,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 18647,
-      "sha256": "47f1acde40a7fa6537038f9570fbd3ea660c56fccf98995ad4394df6f1fe9da4"
+      "bytes": 18499,
+      "sha256": "c199a6cbadbdbb918e178a79fce69e6add4a7f402be065a3607fbc83d599d2fe"
     },
     {
       "path": "assets/trading-calendar.mjs",
@@ -128,8 +128,8 @@
     },
     {
       "path": "assets/watch.mjs",
-      "bytes": 19100,
-      "sha256": "dc2f3f4a24bc2e5c0d15b75911483bf8c032e4b79df69e08677c9a48aad13829"
+      "bytes": 19091,
+      "sha256": "4fcf254f734ebfffda0536f73dc7ea6451d8783d35e96a2694879c280a9031f8"
     },
     {
       "path": "automation/derivatives/backfill_volume_reports.py",
@@ -253,8 +253,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3481,
-      "sha256": "206d8ae2267c45e4e61fb58bbdaca6e9f9b8ca3a8800b5b4d32614bc76eccb88"
+      "bytes": 3482,
+      "sha256": "191df88e5d10426ace468a358c1e352cda3c0a23fd5cffbcdbbef4f5e3c43082"
     }
   ]
 }

@@ -26,7 +26,7 @@ export function equityChart(points) {
     const x = i => left + i / Math.max(1, points.length - 1) * (right - left), y = v => bottom - (v - low) / range * (bottom - top);
     let drawing = false;
     const path = points.map((p, i) => { if (!finite(p.equity)) { drawing = false; return ''; } const part = `${drawing ? 'L' : 'M'}${x(i)},${y(p.equity)}`; drawing = true; return part; }).join(' ');
-    return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" role="img" aria-label="模擬帳戶淨值"><title>模擬帳戶淨值；缺值中斷</title>${ticks.map(([v, text]) => `<text x="${left - 5}" y="${y(v)}" text-anchor="end">${text}</text>`).join('')}<path d="${path}" stroke="#77e2d0" stroke-width="${wide ? 2.4 : 2}" fill="none"/><text x="${left}" y="${height - 13}">${esc(points[0].date)}</text><text x="${right}" y="${height - 13}" text-anchor="end">${esc(points.at(-1).date)}</text></svg>`;
+    return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" role="img" aria-label="模擬帳戶淨值"><title>模擬帳戶淨值；缺值中斷</title>${ticks.map(([v, text]) => `<text x="${left - 5}" y="${y(v)}" text-anchor="end">${text}</text>`).join('')}<path d="${path}" class="series" stroke-width="${wide ? 2.4 : 2}" fill="none"/><text x="${left}" y="${height - 13}">${esc(points[0].date)}</text><text x="${right}" y="${height - 13}" text-anchor="end">${esc(points.at(-1).date)}</text></svg>`;
   });
 }
 
