@@ -60,15 +60,21 @@ jobs:
           if [ -f data/derivatives/stock-warrant-directory.json ]; then
             python automation/derivatives/warrant_directory.py --coverage-only
           fi
+      - name: Refresh daily warrant research journal with ranking evidence
+        id: journal
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_journal.py
       - name: Record actual ranking check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py branches ${{ steps.collect.outcome }} ${{ steps.coverage.outcome }}
+        run: python automation/derivatives/check_status.py branches ${{ steps.collect.outcome }} ${{ steps.coverage.outcome }} ${{ steps.journal.outcome }}
       - name: Commit rankings and source status
         id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/derivatives/warrant-branches*
+          if [ -d data/derivatives/daily-reports/warrant-journal ]; then git add data/derivatives/daily-reports/warrant-journal/; fi
           if [ -f data/derivatives/check-branches.json ]; then git add data/derivatives/check-branches.json; fi
           if [ -f data/derivatives/stock-warrant-coverage.json ]; then git add data/derivatives/stock-warrant-coverage.json; fi
           if [ -f data/derivatives/trading-calendar.json ]; then
@@ -89,5 +95,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure' || steps.journal.outcome == 'failure'
         run: exit 1
