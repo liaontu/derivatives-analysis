@@ -9,6 +9,7 @@ const rowRate = s => ratio(hits(s),s.eligible);
 const types = {futures:'臺股期貨',options:'臺指選擇權'};
 const optionSide = cp => cp === 'C' ? '買權' : cp === 'P' ? '賣權' : '';
 const numberWithChange = (v,old) => fmt(v)+'<small>變動 '+signed(delta(v,old))+'</small>';
+const coverageLabels = {available:'行情齊備',partial:'部分資料',missing:'資料不足',closed:'休市'};
 
 export function movement(w,s) {
   if (!finite(w) || !finite(s)) return '缺同期間價格';
@@ -33,9 +34,9 @@ export function strikeRanking(rows, month, side) {
   return {known, missing:groups.size-known.length, total:known.reduce((n,x) => n+x.total,0)};
 }
 
-function dayHeaders(index,kind,day,prior,select) {
+function dayHeaders(index,kind,day,prior,select,days=index.dates) {
   const file = 'data/derivatives/daily-reports/'+kind+'/'+day+'.json';
-  return `<section class="panel"><div class="panel-head"><div>${select('report-date','行情日',index.dates.slice().reverse(),day)}
+  return `<section class="panel"><div class="panel-head"><div>${select('report-date','行情日',days.slice().reverse(),day)}
     <small>前一收錄日 ${esc(prior || '尚無')}</small></div><div><button id="report-print">列印目前畫面／PDF</button> <a class="text-link" href="${esc(file)}" download>下載完整本期資料</a></div></div>
     ${index.status === 'retained' ? '<p class="notice warning">最近一輪資料尚未齊備，保留上次核對通過的報告。'+(index.attemptSources||[]).map(s=>esc(s.id)+' '+esc(s.date||'缺日期')+' '+esc(s.status)).join(' · ')+'</p>' : ''}</section>`;
 }
@@ -54,6 +55,18 @@ function pagination(pos, size, length, key) {
 
 export function createReports({load,table,tr,select,metric}) {
   const state = {sort:'count', min:'1', query:'', stock:'', page:0, details:0, month:'all'};
+  function coveragePanel(coverage,index) {
+    if (!coverage) return '';
+    const entries=Object.entries(coverage.days);
+    const count=status=>entries.filter(([,v])=>v.status===status).length;
+    return `<section class="panel"><h2>每日資料涵蓋</h2><p>${esc(coverage.start)} 至 ${esc(coverage.end)} · 行情齊備 ${count('available')} 日、部分資料 ${count('partial')} 日、資料不足 ${count('missing')} 日、休市 ${count('closed')} 日。</p>
+      <details id="report-coverage"><summary>逐日查看檔數與不足原因</summary>
+      ${table(['日期','狀態','收錄／可比較','量增檔數','資料說明'],entries.slice().reverse().map(([day,v])=>tr([
+        index.dates.includes(day)?`<a href="#warrant-volume-report?date=${esc(day)}">${esc(day)}</a>`:esc(day),
+        coverageLabels[v.status]||esc(v.status),fmt(v.total)+'／'+fmt(v.eligible),fmt(v.surges),
+        esc([...(v.notes||[]),...(v.missingSources||[]).map(s=>s.market+' '+s.reason)].join('；'))])))}
+      <p class="note">行情齊備表示已取得兩市場的同日價量及前五交易日基準。個別權證仍可能因無成交、歷史不足或均量為零而無法比較。歷史個股分類採各期註明的官方名錄，補抓資料可能含官方後續修訂。</p></details></section>`;
+  }
   function volume(report) {
     const stocks = report.stocks;
     const eligible = stocks.reduce((n,s)=>n+s.eligible,0), total = stocks.reduce((n,s)=>n+s.total,0);
@@ -76,11 +89,15 @@ export function createReports({load,table,tr,select,metric}) {
         ${table(['權證／代碼','權別','成交量（張）','前五期均量倍數','比較起日','權證漲跌','現股漲跌','價格方向'],s.hits.slice(state.details*size,(state.details+1)*size).map(r=>tr([esc(r.name)+'<small>'+esc(r.code)+'</small>',r.cp==='C'?'認購':'認售',fmt(r.volume),fmt(r.multiple,2)+' 倍',esc(r.previous || '—'),signed(r.warrantPct,'%'),signed(r.stockPct,'%'),movement(r.warrantPct,r.stockPct)])))}
         ${pagination(state.details,size,s.hits.length,'details')}<p><a href="#warrant-daily?underlying=${esc(s.code)}">查看此標的最新逐檔觀察表 →</a></p></section>`;
     }
-    return `<section class="panel"><div class="metrics">${metric('收錄個股',fmt(stocks.length),fmt(total)+' 檔個股權證')}
+    const scope = report.coverage;
+    const coverageNote = scope ? `<p class="notice ${scope.status==='partial'?'warning':''}">本期${coverageLabels[scope.status]} · ${(scope.markets||[]).map(m=>m==='TWSE'?'上市':'上櫃').join('、')}。${esc((scope.notes||[]).join(' '))}</p>`:'';
+    const baseline = report.rules.version==='volume-only-v2' ? '交易日' : '已收錄行情日';
+    return `${coverageNote}<section class="panel"><div class="metrics">${metric('收錄個股',fmt(stocks.length),fmt(total)+' 檔個股權證')}
       ${metric('可比較權證',fmt(eligible),fmt(total-eligible)+' 檔缺資料或不符資格')}
       ${metric('量增權證',fmt(call+put),'認購 '+fmt(call)+' · 認售 '+fmt(put))}
       ${metric('有權證入榜的個股',fmt(stocks.filter(s=>hits(s)>0).length),'全體可比較權證入榜率 '+pct(ratio(call+put,eligible)))}</div>${leaders}
-      <p>量增採當日至少 ${report.rules.minVolume} 張，且達前 ${report.rules.volumeWindow} 個已收錄行情日均量的 ${report.rules.volumeMultiple} 倍。入榜率＝入榜檔數 ÷ 同標的可比較檔數。均量為零或缺值時不列入分母。</p></section>
+      <p>量增採當日至少 ${report.rules.minVolume} 張，且達前 ${report.rules.volumeWindow} 個${baseline}均量的 ${report.rules.volumeMultiple} 倍。入榜率＝入榜檔數 ÷ 同標的可比較檔數。均量為零或缺值時不列入分母。</p>
+      ${report.baselineDates ? '<p class="note">本期均量基準 '+report.baselineDates.map(esc).join('、')+'。量價資格核對代碼、名稱、權別、標的與逐日價量。</p>':''}</section>
       <section class="panel"><h2>個股放量排行</h2><form id="report-search" class="filters"><label>代碼或名稱<input name="query" value="${esc(state.query)}"></label><button>查詢</button>
       ${select('report-sort','排序',['count','rate'],state.sort,k=>k==='count'?'入榜檔數':'入榜率')}
       ${select('report-min','最少可比較檔數',['0','1','5','10','25','50'],state.min)}</form>
@@ -138,12 +155,20 @@ export function createReports({load,table,tr,select,metric}) {
     const warrant = route==='warrant-volume-report', kind=warrant?'warrant-volume':'positioning';
     const index=await load('daily-reports/'+kind+'/index');
     if (!index.dates.length) return '<p class="notice warning">等待第一份同日來源齊備的報告。</p>';
+    const coverage=warrant ? await load('daily-reports/warrant-volume/coverage').catch(()=>null) : null;
+    const days=[...new Set([...index.dates,...Object.keys(coverage?.days||{})])].sort();
+    const coverageHtml=coveragePanel(coverage,index);
     const desired=new URLSearchParams(location.hash.split('?')[1]).get('date');
-    if(desired && !index.dates.includes(desired)) return '<p class="notice warning">此日沒有已保存的報告。<a href="#'+route+'">查看最近一期</a></p>';
+    if(desired && !index.dates.includes(desired)) {
+      const status=coverage?.days[desired];
+      return '<div class="daily-report"><section class="panel">'+select('report-date','日期',days.slice().reverse(),desired)+
+        '<p class="notice warning">'+esc(desired)+' · '+(status?coverageLabels[status.status]:'此日沒有已保存的報告')+'。</p><p>'+esc((status?.notes||[]).join(' '))+
+        '</p><a href="#'+route+'">查看最近一期</a></section>'+coverageHtml+'</div>';
+    }
     const day=desired || index.dates.at(-1), prior=index.dates[index.dates.indexOf(day)-1];
     const prefix='daily-reports/'+kind+'/';
     const [now,previous]=await Promise.all([load(prefix+day),prior && !warrant ? load(prefix+prior) : null]);
-    return '<div class="daily-report">'+dayHeaders(index,kind,day,prior,select)+(warrant?volume(now):positioning(now,previous))+sources(now)+'</div>';
+    return '<div class="daily-report">'+dayHeaders(index,kind,day,prior,select,days)+coverageHtml+(warrant?volume(now):positioning(now,previous))+sources(now)+'</div>';
   }
 
   function bind(route,rerender) {

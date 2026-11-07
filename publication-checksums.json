@@ -58,8 +58,8 @@
     },
     {
       "path": "assets/daily-reports.mjs",
-      "bytes": 14845,
-      "sha256": "85cc5de4dbf74add7b704dc147316eda15278a55e3a0e2c7070683114132ae59"
+      "bytes": 17463,
+      "sha256": "701bb42a985ce225d5315be631ba0e6a65d52375e88ef519710b0d934371dd29"
     },
     {
       "path": "assets/daily-table.mjs",
@@ -108,8 +108,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 18563,
-      "sha256": "93996ce28c3aad5188500b00841ddebf14f11784f0d30be9c9cca3718b82e5de"
+      "bytes": 18647,
+      "sha256": "47f1acde40a7fa6537038f9570fbd3ea660c56fccf98995ad4394df6f1fe9da4"
     },
     {
       "path": "assets/trading-calendar.mjs",
@@ -130,6 +130,11 @@
       "path": "assets/watch.mjs",
       "bytes": 19100,
       "sha256": "dc2f3f4a24bc2e5c0d15b75911483bf8c032e4b79df69e08677c9a48aad13829"
+    },
+    {
+      "path": "automation/derivatives/backfill_volume_reports.py",
+      "bytes": 12853,
+      "sha256": "5bf8f2b1d289ecc4ba1b5c17223fe4509999fb1cb8b517f309c7e2af846d622b"
     },
     {
       "path": "automation/derivatives/backfill_warrants.py",
@@ -158,8 +163,8 @@
     },
     {
       "path": "automation/derivatives/daily_reports.py",
-      "bytes": 8391,
-      "sha256": "51137ae77f11673dac31255476e1e4c5f4f3f303472954e201ac00c67e40736b"
+      "bytes": 10715,
+      "sha256": "48b15016cbeaf81e1529a60d8708c2cb4d7a8d4757c6d41934c7b6c9fca3c270"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",

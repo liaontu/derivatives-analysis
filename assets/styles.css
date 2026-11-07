@@ -156,3 +156,5 @@ footer{display:flex;justify-content:space-between;gap:14px;padding:7px 0 26px;co
   .daily-report,.daily-report .split{display:block}.daily-report .panel{break-inside:auto;margin:0 0 1em;box-shadow:none}
   .daily-report .table-wrap{overflow:visible}.daily-report table{width:100%;min-width:0;font-size:8pt}.daily-report th,.daily-report td{white-space:normal;padding:3pt}.daily-report tr{break-inside:avoid}
 }
+
+#report-coverage td:last-child{white-space:normal;min-width:220px;max-width:420px}

@@ -1,6 +1,6 @@
 """Archive two independent Taiwan market reports at their own source dates."""
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, timedelta
 import argparse
 import json
 from pathlib import Path
@@ -9,11 +9,11 @@ import re
 if __package__:
     from .publication import save_text
     from .warrant_focus import RULES, numeric, percent, volume_evidence
-    from .warrant_spreads import exclusion
+    from .trading_calendar import load_calendar
 else:
     from publication import save_text
     from warrant_focus import RULES, numeric, percent, volume_evidence
-    from warrant_spreads import exclusion
+    from trading_calendar import load_calendar
 
 WARRANT_SOURCES = ('twse-warrants', 'twse-volume', 'twse-volume-put', 'tpex-warrants', 'tpex-terms')
 POSITION_SOURCES = ('futures-institutional', 'options-institutional', 'futures-large',
@@ -42,6 +42,26 @@ def traded(point):
     return len(point) >= 3 and all(numeric(v) and v > 0 for v in point[1:3])
 
 
+def baseline_days(day, calendar):
+    cursor = date.fromisoformat(day)
+    days = []
+    while len(days) < RULES['volumeWindow']:
+        cursor -= timedelta(days=1)
+        if calendar.is_open(cursor):
+            days.append(cursor.isoformat())
+    return sorted(days)
+
+
+def volume_exclusion(row):
+    code, cp = row.get('code', ''), row.get('cp')
+    pattern = r'\d{6}' if cp == 'C' else r'\d{5}[PUT]' if cp == 'P' else r'(?!)'
+    if not re.fullmatch(pattern, code):
+        return '認購售代碼／權別未確認'
+    if not traded([row.get('date'), row.get('price'), row.get('volume')]):
+        return '無有效成交價格或成交量'
+    return None
+
+
 def warrant_report(output, manifest):
     day, sources = aligned(manifest['sources'], WARRANT_SOURCES)
     directory = read(output / 'stock-warrant-directory.json')
@@ -52,9 +72,7 @@ def warrant_report(output, manifest):
     rows = [r for r in all_rows if r.get('underlying') in names and r['date'] == day]
     if len(rows) != directory['count']:
         raise ValueError('個股權證名錄與行情檔數不同')
-    codes = Counter(r['code'] for r in all_rows)
     histories = {}
-    periods = defaultdict(set)
     for code in names:
         if not re.fullmatch(r'[0-9]{4}', code):
             raise ValueError('個股代碼格式不符')
@@ -65,24 +83,32 @@ def warrant_report(output, manifest):
         if history.get('underlying') != code:
             continue
         histories[code] = history
-        for q in history['quotes'].values():
-            periods[q.get('market')].update(p[0] for p in q['rows'] if p[0] <= day)
+    membership = {'dates':{k:v for k,v in directory['sourceDates'].items() if k.endswith('Companies')},
+                  'basis':'daily-directory'}
+    report = build_volume_report(day, rows, histories, names, sources, baseline_days(day, load_calendar(output)))
+    report['coverage'] = {'status':'available', 'markets':['TWSE','TPEX'], 'membership':membership,
+                          'notes':[], 'missingSources':[]}
+    return report
+
+
+def build_volume_report(day, rows, histories, names, sources, baseline):
+    codes = Counter(r['code'] for r in rows)
     stocks = {code: {'code': code, 'name': info['name'], 'total': 0, 'eligible': 0,
                      'callBase': 0, 'putBase': 0, 'call': 0, 'put': 0, 'hits': []} for code, info in names.items()}
     reasons = Counter()
     for row in rows:
         stock = stocks[row['underlying']]
         stock['total'] += 1
-        reason = exclusion(row) if codes[row['code']] == 1 else '權證代碼重複'
+        reason = volume_exclusion(row) if codes[row['code']] == 1 else '權證代碼重複'
         if reason:
             reasons[reason] += 1
             continue
         history = histories.get(row['underlying'], {})
         q = history.get('quotes', {}).get(row['code'], {})
-        if any(q.get(k) != row.get(k) for k in ('market', 'name', 'expiry', 'cp')):
+        if any(q.get(k) != row.get(k) for k in ('market', 'name', 'cp')):
             reasons['無吻合的權證歷史'] += 1
             continue
-        evidence = volume_evidence(row, history, periods[row['market']])
+        evidence = volume_evidence(row, history, baseline)
         if evidence['status'] != '可比較':
             reasons[evidence['status']] += 1
             continue
@@ -101,7 +127,8 @@ def warrant_report(output, manifest):
                               'previous': prior[0] if prior else None, 'warrantPct': wr, 'stockPct': sr})
     for stock in stocks.values():
         stock['hits'].sort(key=lambda r: (-r['volume'], r['code']))
-    return {'date': day, 'sources': sources, 'rules': {k: RULES[k] for k in ('minVolume','volumeWindow','volumeMultiple')},
+    return {'date': day, 'sources': sources, 'baselineDates':baseline,
+            'rules': {'version':'volume-only-v2', **{k: RULES[k] for k in ('minVolume','volumeWindow','volumeMultiple')}},
             'excluded': dict(reasons), 'stocks': list(stocks.values())}
 
 
@@ -146,6 +173,33 @@ def archive(output, kind, report):
     save(folder / (report['date'] + '.json'), report)
     days = sorted(p.stem for p in folder.glob('????-??-??.json'))
     save(folder / 'index.json', {'dates': days, 'status':'ok'})
+    if kind == 'warrant-volume':
+        stocks = report['stocks']
+        update_coverage(output, {report['date']:{
+            **report.get('coverage', {'status':'available'}),
+            'total':sum(s['total'] for s in stocks), 'eligible':sum(s['eligible'] for s in stocks),
+            'surges':sum(s['call']+s['put'] for s in stocks)}})
+
+
+def update_coverage(output, entries, start=None, end=None):
+    path = output / 'daily-reports/warrant-volume/coverage.json'
+    previous = read(path) if path.exists() else {'days':{}}
+    days = {**previous['days'], **entries}
+    dates = list(days)
+    if start:
+        dates.append(str(start))
+    if end:
+        dates.append(str(end))
+    start, end = min(dates), max(dates)
+    calendar = load_calendar(output)
+    cursor = date.fromisoformat(start)
+    while cursor.isoformat() <= end:
+        key = cursor.isoformat()
+        if key not in days:
+            days[key] = {'status':'missing' if calendar.is_open(cursor) else 'closed',
+                         'notes':['尚無通過核對的日報'] if calendar.is_open(cursor) else ['依已核實交易日曆休市']}
+        cursor += timedelta(days=1)
+    save(path, {'start':start,'end':end,'days':dict(sorted(days.items()))})
 
 
 def main():
