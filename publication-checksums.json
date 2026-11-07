@@ -13,13 +13,13 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 3751,
-      "sha256": "7c66411a0a46e4856c08f95171253c735176f46cede4c39c0434bf291bf5f0e1"
+      "bytes": 4057,
+      "sha256": "d634e5b045ed762859bd5a385d2da7e6a649375b5a246cb4f274ea984992bda6"
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
-      "bytes": 4352,
-      "sha256": "2fc45d42cd61d554db54a9db8f3a10eb59da460cc765e82509d8993c986f735c"
+      "bytes": 4813,
+      "sha256": "d517208c266362113e910cb635800d4a13a7235f8088c66fc5721c87e33f4298"
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
@@ -38,13 +38,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 7592,
-      "sha256": "6fac5f21834ba4726861e54620fbe465f29f6478c7d2c0a7c54f170305a993e8"
+      "bytes": 8123,
+      "sha256": "c026aa1e3c17ac4ebfe55d94410656b3c28ee450396fe348b1142ac523cebf19"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 49720,
-      "sha256": "e6c41b839fa08cefbf5cbd0863a2fb9e0e2cbc371fc54e4769b480775a127db3"
+      "bytes": 50257,
+      "sha256": "f118563f1439de107b2543cd4cb71f2b3173cfef1bbc5308ca9ed7046451de51"
     },
     {
       "path": "assets/branches.mjs",
@@ -108,8 +108,8 @@
     },
     {
       "path": "assets/styles.css",
-      "bytes": 19954,
-      "sha256": "694faaf0a4b0663b5c0cdd930ee4311e2950d0dc7e57cf4a5630f92627fb0319"
+      "bytes": 20383,
+      "sha256": "eea39419303647676bb2404dd07d8b547fcdc8770028617f1dfa99e8618bd0a8"
     },
     {
       "path": "assets/trading-calendar.mjs",
@@ -130,6 +130,11 @@
       "path": "assets/warrant-journal.mjs",
       "bytes": 18299,
       "sha256": "1fc300be6dd1ac31fc0fadd9101ed0d701f0c0c4034eb0e6ab228bb3c78de0d3"
+    },
+    {
+      "path": "assets/warrant-relationship.mjs",
+      "bytes": 19467,
+      "sha256": "c00242e022e93a03db5779e08ca90a9d8b0757f4ccdac8ad239857dc73e2e559"
     },
     {
       "path": "assets/watch.mjs",
@@ -257,14 +262,19 @@
       "sha256": "9029dece239c429157007f285975ed61783393902bc259634c33c536746ea8af"
     },
     {
+      "path": "automation/derivatives/warrant_relationship.py",
+      "bytes": 19016,
+      "sha256": "c63e9504511821eda2f73d8f722ab30f32325afed3777b7e49e769068543fb8f"
+    },
+    {
       "path": "automation/derivatives/warrant_spreads.py",
       "bytes": 16336,
       "sha256": "8a01e8a671a7f534173db5273aa003ef1ff5ba9d80d79739ad912b1a39a357ec"
     },
     {
       "path": "index.html",
-      "bytes": 3579,
-      "sha256": "42c0122035e5ba5f89aceec50185f78dd39aa1e7b33c98393d9fba749deaed90"
+      "bytes": 3691,
+      "sha256": "e81b0cb0a640be10105befea753eeeabf8961bfca5fb939b3487db4077f9b881"
     }
   ]
 }

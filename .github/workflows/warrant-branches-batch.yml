@@ -65,15 +65,21 @@ jobs:
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
         continue-on-error: true
         run: python automation/derivatives/warrant_journal.py
+      - name: Update monthly spot and warrant relationships
+        id: relationship
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_relationship.py
       - name: Record actual ranking check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py branches ${{ steps.collect.outcome }} ${{ steps.coverage.outcome }} ${{ steps.journal.outcome }}
+        run: python automation/derivatives/check_status.py branches ${{ steps.collect.outcome }} ${{ steps.coverage.outcome }} ${{ steps.journal.outcome }} ${{ steps.relationship.outcome }}
       - name: Commit rankings and source status
         id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/derivatives/warrant-branches*
+          if [ -d data/derivatives/warrant-relationship ]; then git add data/derivatives/warrant-relationship/; fi
           if [ -d data/derivatives/daily-reports/warrant-journal ]; then git add data/derivatives/daily-reports/warrant-journal/; fi
           if [ -f data/derivatives/check-branches.json ]; then git add data/derivatives/check-branches.json; fi
           if [ -f data/derivatives/stock-warrant-coverage.json ]; then git add data/derivatives/stock-warrant-coverage.json; fi
@@ -95,5 +101,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure' || steps.journal.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure'
         run: exit 1

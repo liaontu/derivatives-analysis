@@ -55,9 +55,14 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_journal.py
+      - name: Update monthly spot and warrant relationships
+        id: relationship
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_relationship.py
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.stock_options.outcome }} ${{ steps.reports.outcome }} ${{ steps.journal.outcome }}
+        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.stock_options.outcome }} ${{ steps.reports.outcome }} ${{ steps.journal.outcome }} ${{ steps.relationship.outcome }}
       - name: Commit data and source status
         id: commit
         run: |
@@ -80,5 +85,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure'
         run: exit 1
