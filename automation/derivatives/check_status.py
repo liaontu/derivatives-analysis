@@ -6,6 +6,7 @@ import json
 import os
 
 ARTIFACTS = {
+    'derivative_daily': ['derivative-reports.json'], 'derivative_series': ['derivative-reports.json'],
     'collect': ['manifest.json'], 'directory': ['stock-warrant-directory.json'],
     'option_history': ['option-history.json'], 'stock_options': ['stock-option-watch.json'],
     'reports': ['daily-reports/warrant-volume/index.json', 'daily-reports/positioning/index.json'],

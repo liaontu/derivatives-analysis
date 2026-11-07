@@ -39,13 +39,22 @@ jobs:
           KIND: ${{ inputs.kind || 'auto' }}
           TODAY: ${{ inputs.today }}
         run: python automation/derivatives/warrant_series_reports.py --kind "$KIND" ${TODAY:+--today "$TODAY"}
+      - name: Build futures and options weekly and monthly reviews
+        id: derivative_series
+        continue-on-error: true
+        env:
+          KIND: ${{ inputs.kind || 'auto' }}
+          TODAY: ${{ inputs.today }}
+        run: |
+          python automation/derivatives/derivative_reports.py --kind "$KIND" ${TODAY:+--today "$TODAY"}
       - name: Record report generation result
-        run: python automation/derivatives/check_status.py series-reports series=${{ steps.series.outcome }}
+        run: python automation/derivatives/check_status.py series-reports series=${{ steps.series.outcome }} derivative_series=${{ steps.derivative_series.outcome }}
       - name: Commit reports
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/derivatives/warrant-series-reports data/derivatives/warrant-series-reports.json
+          git add data/derivatives/derivative-reports data/derivatives/derivative-reports.json
           git add data/derivatives/check-series-reports.json
           if git diff --cached --quiet; then
             echo "Checked at $(date -u +%FT%TZ): reports unchanged." >> "$GITHUB_STEP_SUMMARY"
@@ -74,5 +83,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Fail explicitly when generation or publication failed
-        if: steps.series.outcome == 'failure' || steps.publication.outcome == 'failure'
+        if: steps.derivative_series.outcome == 'failure' || steps.series.outcome == 'failure' || steps.publication.outcome == 'failure'
         run: exit 1
