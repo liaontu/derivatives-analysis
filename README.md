@@ -30,6 +30,8 @@ https://liaontu.github.io/derivatives-analysis/
 
 手動更新：Actions → derivatives-daily → Run workflow。每日重點觀察 #warrant-focus 由同一免費日排程產生：前五期均量至少 2 倍且 100 張、價差 |Z|≥2；較大價差另列待觀察，不混充異常。
 
+權證時間序列週報與月報 #series-report：每週六 12:00（台北）整理週一至週五、每月第一個週六整理上一個月的權證與標的收盤序列；常交易權證的期間報酬、方向一致比例，月報另有權證對標的日報酬的斜率與相關。描述統計、同期間改版保留舊版，不構成買賣建議。
+
 本機更新：`python automation/derivatives/collect.py`。工作流程核對 Pages 最新 build 與 HEAD，必要時明確呼叫 build API。
 
 市場篩選預設下載成交量前 2,000 檔，需要時載入全市場。個股觀察表的前次成交價與前筆成交量基準寫入行情分檔，不需要下載整包歷史。權證按標的載入 `warrant-catalog.json` 與 `warrants-by-underlying/<代碼>.json`；完整市場清單須明確選取。保留完整 `warrants.json` 供分點 collector、離線工具與舊版相容。只發布 JSON，由 GitHub Pages 透過 HTTP 壓縮傳輸，不再另存或請求 `.json.gz`。既有 Git 歷史不改寫。

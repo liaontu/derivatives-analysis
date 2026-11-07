@@ -17,6 +17,11 @@
       "sha256": "d634e5b045ed762859bd5a385d2da7e6a649375b5a246cb4f274ea984992bda6"
     },
     {
+      "path": ".github/workflows/derivatives-series-reports.yml",
+      "bytes": 1975,
+      "sha256": "d57050847a44dd24288ce59e01a090195dd517dda2f48bb9db89a1f555e92c0c"
+    },
+    {
       "path": ".github/workflows/warrant-branches-batch.yml",
       "bytes": 4813,
       "sha256": "d517208c266362113e910cb635800d4a13a7235f8088c66fc5721c87e33f4298"
@@ -38,13 +43,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 8123,
-      "sha256": "c026aa1e3c17ac4ebfe55d94410656b3c28ee450396fe348b1142ac523cebf19"
+      "bytes": 8479,
+      "sha256": "d86496fd8b0c51b4380ce535ede385d811e3ad6ceff7c45e46715f44232df1c8"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 50257,
-      "sha256": "f118563f1439de107b2543cd4cb71f2b3173cfef1bbc5308ca9ed7046451de51"
+      "bytes": 50805,
+      "sha256": "6b34ba995b4e52c158717b9eb41f52e303891162b6d68031ce4a961ba692e1d1"
     },
     {
       "path": "assets/branches.mjs",
@@ -95,6 +100,11 @@
       "path": "assets/model.mjs",
       "bytes": 7247,
       "sha256": "6276a9f4317820585df11f6cc5d66feaf39404eb30661988e4379569ebf08879"
+    },
+    {
+      "path": "assets/series-reports.mjs",
+      "bytes": 15558,
+      "sha256": "2d0ab70b7372c3d4666903580a82844af558d11f0fca8239df3a7301cf75d637"
     },
     {
       "path": "assets/spreads.mjs",
@@ -267,14 +277,19 @@
       "sha256": "c63e9504511821eda2f73d8f722ab30f32325afed3777b7e49e769068543fb8f"
     },
     {
+      "path": "automation/derivatives/warrant_series_reports.py",
+      "bytes": 35734,
+      "sha256": "8dfcbdbd9614bc6e432ec8f938fc272bdf0975410288a419781cad2cdd570960"
+    },
+    {
       "path": "automation/derivatives/warrant_spreads.py",
       "bytes": 16336,
       "sha256": "8a01e8a671a7f534173db5273aa003ef1ff5ba9d80d79739ad912b1a39a357ec"
     },
     {
       "path": "index.html",
-      "bytes": 3691,
-      "sha256": "e81b0cb0a640be10105befea753eeeabf8961bfca5fb939b3487db4077f9b881"
+      "bytes": 3787,
+      "sha256": "cc1d7b1329c8cbed1e6bb4289c82a99fc1f57b0213f368035034e4d88dc28f9c"
     }
   ]
 }
