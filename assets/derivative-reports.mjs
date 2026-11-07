@@ -1,4 +1,5 @@
 import {esc,fmt,finite,taipeiTime} from './model.mjs';
+import {fcmAudit} from './market-history.mjs';
 
 const kinds={daily:'每日簡報',weekly:'每週完整分析',monthly:'每月策略檢討'};
 const cp=v=>v==='C'?'買權':v==='P'?'賣權':'—';
@@ -18,6 +19,10 @@ export function eventRows(rows,{tr}){
   return rows.map(r=>tr([esc(r.label)+' · '+cp(r.cp),n(r.evaluated)+'／'+n(r.signals),n(r.distinctSignalDates),pct(r.median),pct(r.positivePct),
     pct(r.mean),pct(r.meanCost1)+'／'+pct(r.meanCost3),
     `未到日 ${n(r.counts?.pending||0)}<small>缺進場 ${n(r.counts?.['missing-entry']||0)} · 缺退出／到期 ${n(r.counts?.['missing-exit']||0)}</small>`,esc(r.assessment)]));
+}
+export function renderFcmMonthly(monthly,{table,tr}){
+  if(!monthly)return '';
+  return `<section class="panel fcm-monthly"><h2>官方期貨商完整月表分析</h2><p>${esc(monthly.month)}；${esc(monthly.note)}</p><p>按官方商品分類統計，個股期貨 STF、ETF 期貨 ETF 等為合併分類。經紀／自營代碼分列，不合併成金控；零成交商品的占比顯示「—」。</p>${table(['市場／商品','全月交易量（雙邊口）','有成交／收錄代碼','前五名占比','前三名代碼'],monthly.products.map(r=>tr([(r.market==='futures'?'期貨':'選擇權')+'／'+esc(r.contract),n(r.total),n(r.activeCodes)+'／'+n(r.codes),finite(r.top5Share)?n(r.top5Share,2)+'%':'—',r.leaders.map(x=>esc(x.name)+' '+n(x.volume)).join('<br>')])))}<p>${monthly.sources.map(s=>/^market-history\/fcm-monthly\/(futures|options)-\d{4}-\d{2}-[a-f0-9]{12}\.json\.gz$/.test(s.path)?`<a href="data/derivatives/${esc(s.path)}" download>下載${s.market==='futures'?'期貨':'選擇權'}完整月表（${n(s.rows)} 列，gzip JSON）</a>`:'').join(' · ')}</p><p class="notice warning">月表完整不代表逐日完整；本月缺漏日期仍列在下方來源表，月合計不拆分為日成交量。</p></section>`;
 }
 export function renderDerivativeReport(r,{table,tr,metric}){
   const panels=r.panels||{}, panel=name=>panels[name]||{rows:[]};
@@ -39,6 +44,7 @@ export function renderDerivativeReport(r,{table,tr,metric}){
     <div class="derivative-findings">${notes}</div>
     <div class="metrics mobile-secondary" data-mobile-label="基準日與回測樣本">${metric('期間基準日',esc(r.baseDate),'台灣按核實交易日曆；缺基準就不計變化')}${metric('選擇權歷史日數',n(e.sessions),'資料至 '+esc(e.through||'尚無資料'))}${metric('到期先前訊號可評估',n(e.followup.evaluated)+'／'+n(e.followup.signals),'缺價與未到日不算零報酬')}</div>
     <p class="report-actions"><a class="text-link" href="data/derivatives/derivative-reports/${esc(r.id)}.html" target="_blank" rel="noopener">開啟完整報告／列印</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.html" download>下載 HTML</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.json" download>下載 JSON</a></p></section>
+    ${renderFcmMonthly(r.fcmMonthly,{table,tr})}
     <section class="panel"><h2>台灣期貨與選擇權法人部位</h2>${table(['商品／法人','資料日','多方未平倉','空方未平倉','淨部位（口）','較基準變化'],inst)}
     <p class="note">部位不同可能包含現股避險、套利與不同履約價；不能把買權與賣權口數直接相加當作多空曝險。</p></section>
     <section class="panel"><h2>期間逐日觀察</h2>${table(['日期','外資大台淨部位','投信大台淨部位','選擇權成交量','成交 P/C','未平倉 P/C'],r.timeline.map(x=>tr([
@@ -62,9 +68,10 @@ export function renderDerivativeReport(r,{table,tr,metric}){
       ${table(['訊號日／到期別','權別／履約價','規則','前五日均量倍數','價格變化','未平倉變化'],e.watch.map(x=>tr([esc(x.date)+'<small>'+esc(x.month)+'</small>',cp(x.cp)+'／'+n(x.strike),esc(({volume:'放量',momentum:'價漲放量增倉',pullback:'價跌放量增倉'})[x.rule]||x.rule),n(x.volumeMultiple,2),pct(x.pricePct),signed(x.oiChange)])))}
       <p>下期核對外資淨部位是否延續、同一到期別籌碼是否移動，以及這批訊號的成交價是否足以追蹤；清單不是買賣推薦。</p></section>
     <section class="panel"><h2>個股選擇權價差覆蓋</h2><p>資料日 ${esc(s.date||'尚無')}，${n(s.stocks)} 檔標的、${n(s.pairs)} 組配對；${n(s.active)} 組至少一邊有成交，${n(s.priced)} 組可算收盤價差，${n(s.quoted)} 組有至少一個方向三邊盤末報價。</p><p>缺少同步報價、可成交數量與完整成本時，不能確認套利。<a href="#stock-options">查看個股選擇權與現股 →</a></p></section>
-    <section class="panel derivative-evidence"><h2>資料完整度與來源</h2><p><a href="#market-history">檢查全市場歷史、日夜盤與期貨商全表缺日 →</a></p>${warning}${table(['來源','資料日／基準','本期已收錄／預期日數','狀態與缺漏'],r.sources.map(s=>tr([
-      esc(s.label),esc(s.date||'無')+'<small>基準 '+esc(s.baseDate||'缺資料')+'</small>',n(s.days)+'／'+(s.expected===null?'依美國原頻率':n(s.expected)),esc(statuses[s.status]||s.status)+'<small>'+esc(s.missingDates.join('、')||s.note||'已核對')+'</small>'])))}
-      <details><summary>來源連結與資料雜湊</summary>${r.sources.map(s=>`<p>${esc(s.label)} · ${/^https:\/\//.test(s.url||'')?'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">官方來源</a>':''}<small><code>${esc(s.sha256||'無')}</code></small></p>`).join('')}<p>雜湊對應本報告使用的逐日欄位；歷史來源不宣稱當日已取得。選擇權研究版本 ${esc(e.version||'無')}。</p></details></section>
+    <section class="panel derivative-evidence"><h2>資料完整度與來源</h2><p><a href="#market-history">檢查全市場歷史、日夜盤與期貨商全表缺日 →</a></p>${warning}${table(['來源','資料日／基準','本期已收錄／預期（頻率）','狀態與缺漏'],r.sources.map(s=>tr([
+      esc(s.label),esc(s.date||'無')+'<small>基準 '+esc(s.baseDate||'缺資料')+'</small>',n(s.days)+'／'+(s.expected===null?'依美國原頻率':n(s.expected))+(s.id.endsWith('-fcm-monthly')?'（月）':'（日／期）'),esc(statuses[s.status]||s.status)+'<small>'+esc(s.missingDates.join('、')||s.note||'已核對')+'</small>'])))}
+      ${fcmAudit(r.fcmSourceAudit,{table,tr})}
+      <details><summary>來源連結與資料雜湊</summary>${r.sources.map(s=>`<p>${esc(s.label)} · ${/^https:\/\//.test(s.url||'')?'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">官方來源</a>':''}<small><code>${esc(s.sha256||'無')}</code></small></p>`).join('')}<p>雜湊對應本報告使用的逐日欄位或月表；歷史來源不宣稱當日已取得。選擇權研究版本 ${esc(e.version||'無')}。</p></details></section>
     <section class="panel source-list"><h2>方法、規則與修訂</h2><p>規則版本 ${esc(r.rules.version)}；${esc(r.revisionReason)}。</p><ul>${r.limitations.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></section>`;
 }
 

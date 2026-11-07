@@ -8,6 +8,10 @@ const labels={date:'資料日',contract:'商品',name:'名稱',month:'到期別'
 export function coverageTable(index,{table,tr}){
   return table(['資料','收錄／應有日期','缺日與範圍'],index.coverage.map(r=>tr([esc(r.label),`${r.dates.length}／${r.expected??'日曆未驗證'}`,esc(r.missingDates.join('、')||'本期無缺日')+`<small>${esc(r.note)}</small>`])));
 }
+export function fcmAudit(audit,{table,tr}){
+  if(!audit)return '';
+  return `<details class="fcm-source-audit"><summary>期貨商缺日：免費來源查核（${esc(audit.checkedAt)}）</summary><p>${esc(audit.conclusion)}</p>${table(['來源','查核結果'],audit.checks.map(x=>tr([/^https:\/\//.test(x.url)?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name),esc(x.result)])))}<p><a href="#derivative-report?kind=monthly">查看官方完整月表分析 →</a></p></details>`;
+}
 async function readArchive(entry){
   if(!safeArchivePath(entry.path))throw Error('歷史檔案路徑不符');
   const response=await fetch('data/derivatives/'+entry.path);
@@ -41,6 +45,7 @@ export function createMarketHistory(deps){
     const shown=filtered.slice(state.page*100,(state.page+1)*100), fields=[...new Set(shown.flatMap(r=>Object.keys(r)))];
     const value=v=>v===null||v===undefined?'—':typeof v==='number'?fmt(v):Array.isArray(v)?`<details><summary>部位分類明細</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(v,null,2))}</pre></details>`:esc(v);
     return `<section class="panel"><h2>逐日資料覆蓋檢查</h2><p>${esc(index.start)}～${esc(index.end)}；最後檢查 ${esc(taipeiTime(index.checkedAt))}（台北）。${index.status==='retained'?'本次補抓有失敗，保留已驗證資料。':''}</p>${coverageTable(index,deps)}<details><summary>範圍與限制</summary><ul>${index.limitations.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p>美國日期依 <a href="${esc(index.calendar.us)}">Cboe 公告日曆</a>；CFTC 依週二部位日期檢查，不套用台灣日曆。</p></details>${index.errors?.length?'<p class="notice warning">'+index.errors.map(x=>esc(x.error)).join('；')+'</p>':''}</section>
+      <section class="panel">${fcmAudit(index.fcmSourceAudit,deps)}</section>
       <section class="panel"><h2>歷史全表查詢</h2><div class="filters">${deps.select('mh-feed','資料類別',choices,state.feed,id=>index.coverage.find(x=>x.id===id).label)}${deps.select('mh-day','資料日期',dates,state.day)}${deps.select('mh-contract','商品',['',...contracts],state.contract,x=>x||'全部商品')}${sessions.length?deps.select('mh-session','交易時段',['',...sessions],state.session,x=>x||'全部時段'):''}</div>
       <p>符合條件 ${fmt(filtered.length)} 筆，每頁 100 筆，第 ${state.page+1}／${pages} 頁。<button id="mh-prev" ${state.page===0?'disabled':''}>上一頁</button> <button id="mh-next" ${state.page+1>=pages?'disabled':''}>下一頁</button></p>
       ${failure?'<p class="notice warning">'+esc(failure)+'</p>':deps.table(fields.map(x=>labels[x]||x),shown.map(r=>deps.tr(fields.map(k=>value(r[k])))))}

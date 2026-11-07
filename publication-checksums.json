@@ -43,8 +43,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 13774,
-      "sha256": "e98315ca18eed327bab920625279c1baeddae48a3d3eb86d86c383ea5e041919"
+      "bytes": 13990,
+      "sha256": "3617a65d137cddc867cc2655db2fe6ba2c5f01640ca0a2989abc5b6b4755ebc5"
     },
     {
       "path": "assets/app.mjs",
@@ -73,8 +73,8 @@
     },
     {
       "path": "assets/derivative-reports.mjs",
-      "bytes": 13932,
-      "sha256": "9cb799c590ef6848a90024d27e1b2de137120d0085a0faf9fec86d6103493d79"
+      "bytes": 15391,
+      "sha256": "ea3eea01b2632191f13852a3dbdfe97033a4898eb85c7428697ebfde35075f3a"
     },
     {
       "path": "assets/directory.mjs",
@@ -103,8 +103,8 @@
     },
     {
       "path": "assets/market-history.mjs",
-      "bytes": 6623,
-      "sha256": "55156585778dc1f496e31263d49693f788d5c8bf40aad1f23cc1064e910cc24f"
+      "bytes": 7219,
+      "sha256": "c774cc65d614205cdc3ee0284262a4f61ddcb6adb78f90b4a94d822746b01d6a"
     },
     {
       "path": "assets/mobile-layout.mjs",
@@ -228,13 +228,23 @@
     },
     {
       "path": "automation/derivatives/derivative_reports.py",
-      "bytes": 38928,
-      "sha256": "9a7b8a8db5073088a6067a75ead05d08e991e3268f3ebcd7ce2d1e55f9a27f67"
+      "bytes": 41736,
+      "sha256": "af1428755765ba17c33e361224abf8ed673db86d468edbaf2a34087bca3aa058"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
-      "bytes": 7690,
-      "sha256": "27b2516bdce4ec58c1084138f4187fa4622bccfad616d186dd1450da954b7c28"
+      "bytes": 8260,
+      "sha256": "dc06e7a73030a3e52bb882eacbcde01b5e1601cd142e913b123bad668e67153c"
+    },
+    {
+      "path": "automation/derivatives/fcm-source-audit.json",
+      "bytes": 2129,
+      "sha256": "6c129227037a1516ce8235552dcd476da162af7ab3e8f8dad2a60113ffa93992"
+    },
+    {
+      "path": "automation/derivatives/fcm_monthly.py",
+      "bytes": 6075,
+      "sha256": "d81823e396cce3d87a6595e0d34d789fa014567eb10a159fdba4707e9551a77b"
     },
     {
       "path": "automation/derivatives/governance.py",
@@ -253,8 +263,8 @@
     },
     {
       "path": "automation/derivatives/market_history.py",
-      "bytes": 25991,
-      "sha256": "07c2688fb1ff38fd90f25244ceac1b08f07a066242d842a868870646dc27a357"
+      "bytes": 26340,
+      "sha256": "6841a46ebcd138a3a97428749b3319816b3e60a2a7032234f3241f882df5d100"
     },
     {
       "path": "automation/derivatives/option_history.py",

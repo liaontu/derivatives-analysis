@@ -397,8 +397,30 @@ def build(output, obs, issues, kind, start, end):
                         'note':'交易熱度，不代表方向；免費較早全表未保存的日期不補值',
                         'url':'https://www.taifex.com.tw/cht/7/dailyFCM',
                         'sha256':digest({d:entries[d]['sha256'] for d in dates})})
+    if any(s['id'].endswith('-fcm') and s['missingDates'] for s in sources):
+        report['fcmSourceAudit'] = history.get('fcmSourceAudit')
+    if kind == 'monthly':
+        if __package__:
+            from .fcm_monthly import panel as monthly_panel
+        else:
+            from fcm_monthly import panel as monthly_panel
+        monthly = monthly_panel(output,end[:7])
+        if monthly:
+            report['fcmMonthly'] = monthly
+            for entry in monthly['sources']:
+                sources.append({'id':entry['market']+'-fcm-monthly',
+                    'label':'期貨商官方月表－'+('期貨' if entry['market']=='futures' else '選擇權'),
+                    'date':end,'baseDate':None,'days':1,'expected':1,'missingDates':[],
+                    'status':'retained' if monthly['collectionStatus']=='retained' else 'available',
+                    'note':'單位為月；整月合計，不替代缺漏日表。'+(monthly['error'] or ''),
+                    'url':entry['evidence']['url'],'sha256':entry['sha256']})
     report['status'] = 'partial' if any(s['status'] != 'available' for s in sources) else 'available'
     report['findings'] = findings(report)
+    if report.get('fcmMonthly'):
+        p=report['fcmMonthly']
+        report['findings'].append({'topic':'期貨商整月交易熱度',
+            'fact':p['month']+' 官方月表已收錄 '+str(len(p['products']))+' 個商品分類；完整日表缺漏仍另列。',
+            'reading':'以各商品成交量與前五名代碼占比觀察集中度；經紀與自營各列一碼，未合併金控，也不能判斷買賣方向。'})
     return report
 
 
@@ -445,6 +467,18 @@ def html_document(report):
              '<p>資料日期各自列示；本報告為盤後研究，無自動交易或策略改版。</p>']
     for f in report['findings']:
         parts.append('<h2>'+escape(f['topic'])+'</h2><p>'+escape(f['fact'])+'</p><p>'+escape(f['reading'])+'</p>')
+    if report.get('fcmSourceAudit'):
+        audit=report['fcmSourceAudit']
+        parts.append('<h2>期貨商缺日來源查核</h2><p>'+escape(audit['checkedAt']+'：'+audit['conclusion'])+'</p>'+table(
+            ['來源','查核結果'],[[x['name'],x['result']] for x in audit['checks']]))
+    if report.get('fcmMonthly'):
+        monthly=report['fcmMonthly']
+        parts.append('<h2>官方期貨商完整月表分析</h2><p>'+escape(monthly['month']+'；'+monthly['note'])+'</p>'+table(
+            ['市場／商品','全月交易量（雙邊口）','有成交／收錄代碼','前五名占比%','前三名代碼（未合併經紀／自營）'],
+            [[('期貨' if r['market']=='futures' else '選擇權')+'/'+r['contract'],number(r['total']),str(r['activeCodes'])+'/'+str(r['codes']),number(r['top5Share']),
+              '、'.join(x['name']+' '+number(x['volume']) for x in r['leaders'])] for r in monthly['products']]))
+        for source in monthly['sources']:
+            parts.append('<p><a href="../'+escape(source['path'],quote=True)+'">下載 '+escape(source['market'])+' 完整官方月表（gzip JSON）</a></p>')
     parts.append('<h2>逐日變化</h2>'+table(['日期','外資大台淨部位','投信大台淨部位','選擇權成交','成交 P/C%','未平倉 P/C%'],
         [[r['date']]+[number(r[k]) for k in ('foreignNetOi','trustNetOi','volume','volumeRatio','oiRatio')] for r in report['timeline']]))
     for name, label in [('futures-institutional','大台法人部位'),('options-institutional','臺指選擇權法人部位')]:
@@ -470,7 +504,7 @@ def html_document(report):
             parts.append('<h2>'+label+'</h2>'+table(['規則','權別','可評估／觸發','有效日期','中位數%','正報酬%','平均%','平均減1點','平均減3點','缺漏／未到期'],
                 [[r['label'],r['cp'],f"{r['evaluated']}/{r['signals']}",r['distinctSignalDates']]+[number(r[k]) for k in ['median','positivePct','mean','meanCost1','meanCost3']]+[encoded(r['counts'])]
                  for r in report['events'][key]]))
-    parts.append('<h2>資料覆蓋與證據</h2>'+table(['來源','資料日','比較日','已收錄／預期日數','狀態','缺日期','SHA-256'],
+    parts.append('<h2>資料覆蓋與證據</h2>'+table(['來源','資料日','比較日','已收錄／預期（日／期；月表為月）','狀態','缺日期','SHA-256'],
         [[s['label'],s['date'],s['baseDate'],str(s['days'])+'/'+str(s['expected']),s['status'],','.join(s['missingDates']),s['sha256']] for s in report['sources']]))
     parts.append('<h2>下一期觀察清單</h2>'+table(['訊號日','到期別','權別','履約價','規則','均量倍數','漲跌%','增減倉'],
         [[r['date'],r['month'],r['cp'],number(r['strike']),RULE_LABELS[r['rule']]]+[number(r[k]) for k in ['volumeMultiple','pricePct','oiChange']] for r in report['events']['watch']]))
@@ -531,11 +565,12 @@ def run(output, kind, today, now=None):
     results, failures = [], []
     if kind == 'daily':
         changed = read(output/'market-history.json', {}).get('changedDates', [])
+        changed_months = read(output/'fcm-monthly.json', {}).get('changedMonths', [])
         calendar = load_calendar(output)
         for item in previous_index.get('items', []):
             if item.get('archiveState') != 'current': continue
             baseline = prior_open(calendar, item['periodStart'])
-            if any(baseline <= d <= item['periodEnd'] for d in changed):
+            if any(baseline <= d <= item['periodEnd'] for d in changed) or (item['kind']=='monthly' and item['periodEnd'][:7] in changed_months):
                 try:
                     archive(output, build(output, obs, issues, item['kind'], item['periodStart'], item['periodEnd']), now)
                 except Exception as exc:

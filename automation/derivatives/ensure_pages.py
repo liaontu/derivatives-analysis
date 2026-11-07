@@ -86,6 +86,15 @@ def expected_series(root):
                 if relative.is_absolute() or '..' in relative.parts or relative.parts[0] != 'market-history':
                     raise ValueError('Unsafe history archive path')
                 paths.append('data/derivatives/'+entry['path'])
+    monthly = root/'data/derivatives/fcm-monthly.json'
+    if monthly.exists():
+        paths.append('data/derivatives/fcm-monthly.json')
+        for entries in json.loads(monthly.read_bytes()).get('months',{}).values():
+            for entry in entries.values():
+                relative = Path(entry['path'])
+                if relative.is_absolute() or '..' in relative.parts or relative.parts[:2] != ('market-history','fcm-monthly'):
+                    raise ValueError('Unsafe monthly archive path')
+                paths.append('data/derivatives/'+entry['path'])
     return {p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in paths}
 
 

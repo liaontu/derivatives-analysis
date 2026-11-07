@@ -374,6 +374,9 @@ def coverage(output,index,start,end):
                  limitations=['完整度指已取得來源報表日期，不保證每個契約都有成交價或買賣報價。',FCM_NOTE,
                               '美國免費範圍為 Cboe 統計、CFE 結算與 CFTC 週報，不含 CME 全市場行情或美股完整選擇權鏈。',
                               '歷史回補是事後重建；原始來源、雜湊與舊修訂保留，不能當成當時即時取得。'])
+    audit = read(Path(__file__).with_name('fcm-source-audit.json'))
+    if audit:
+        index['fcmSourceAudit'] = audit
     save(output/(ROOT+'.json'),index)
 
 
@@ -384,7 +387,12 @@ def run(output,start,end,full=False,git_repo=None,max_windows=6):
     ingest_saved(output,index)
     if git_repo: ingest_git(output,index,git_repo)
     baseline=(date.fromisoformat(start)-timedelta(days=10)).isoformat()
-    for operation in (lambda:download_tw(output,index,client,baseline,end,None if full else max_windows),
+    if __package__:
+        from .fcm_monthly import update as update_fcm_monthly
+    else:
+        from fcm_monthly import update as update_fcm_monthly
+    for operation in (lambda:update_fcm_monthly(output,client,start,end),
+                      lambda:download_tw(output,index,client,baseline,end,None if full else max_windows),
                       lambda:download_us(output,index,client,baseline,end,None if full else 2),
                       lambda:backfill_stock(output,index,client,baseline,end,None if full else 2)):
         try: operation()
