@@ -1,16 +1,19 @@
 """Free dated TWSE/TPEx institutional flows for warrant-linked ordinary stocks."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import argparse
+import gzip
 import hashlib
 import json
 import re
 try:
     from .backfill_warrants import fetch_public
     from .daily_reports import read, save
+    from .trading_calendar import load_calendar
 except ImportError:
     from backfill_warrants import fetch_public
     from daily_reports import read, save
+    from trading_calendar import load_calendar
 
 URLS = {
     'TWSE':'https://www.twse.com.tw/rwd/zh/fund/T86?date={day}&selectType=ALLBUT0999&response=json',
@@ -57,11 +60,14 @@ def normalize(raw, market, day, members):
 def enrich(output, rows, day):
     volume_path=output/'daily-reports/warrant-volume'/(day+'.json')
     volume=read(volume_path) if volume_path.exists() else {}
-    stocks={r['code']:r for r in volume.get('stocks',[])}
+    stocks={r['code']:r for r in volume.get('stocks',[])} if volume.get('date')==day else {}
+    calendar=load_calendar(output);previous=date.fromisoformat(day)-timedelta(days=1)
+    while not calendar.is_open(previous):previous-=timedelta(days=1)
+    previous=previous.isoformat()
     for row in rows:
         path=output/'warrant-history'/(row['code']+'.json')
         history=read(path) if path.exists() else {}
-        spot=dict(history.get('underlyingPrices',[]));previous=max((d for d in spot if d<day),default=None)
+        spot=dict(history.get('underlyingPrices',[]))
         price=spot.get(day);base=spot.get(previous)
         row.update(spot=price,spotBaseDate=previous,
                    stockPct=(price/base-1)*100 if isinstance(price,(int,float)) and isinstance(base,(int,float)) and price>0 and base>0 else None)
@@ -70,41 +76,84 @@ def enrich(output, rows, day):
     return rows
 
 
-def collect(output, cache=None, fetcher=fetch_public, now=None):
+def snapshot(output, day, directory, cache=None, fetcher=fetch_public, now=None, mode='daily'):
     now=now or datetime.now(timezone.utc).isoformat(timespec='seconds')
-    manifest=read(output/'manifest.json');feeds={s['id']:s for s in manifest['sources']}
-    directory=read(output/'stock-warrant-directory.json')
     if directory.get('status')!='ok':raise ValueError('Current ordinary-stock directory is not verified')
     members={r['code'] for r in directory['items']}
-    all_rows=[];sources=[];errors=[];dates=[]
-    for market,feed in [('TWSE','twse-warrants'),('TPEX','tpex-warrants')]:
-        day=feeds[feed]['date'];dates.append(day)
+    all_rows=[];sources=[];errors=[];blocked=False
+    old_path=output/'stock-institutional'/(day+'.json')
+    old=read(old_path) if old_path.exists() else {}
+    old_sources={s['market']:s for s in old.get('sources',[])}
+    for market in ('TWSE','TPEX'):
         url=URLS[market].format(day=day.replace('-',''),slash=day.replace('-','%2F'))
         try:
-            cached=cache/('t86-' + day + '.json' if market=='TWSE' else 'tpex-inst-'+day+'.json') if cache else None
+            cached=cache/(market+'-'+day+'.json') if cache else None
+            if cached and not cached.exists():
+                legacy=cache/('t86-' + day + '.json' if market=='TWSE' else 'tpex-inst-'+day+'.json')
+                if legacy.exists():cached=legacy
             raw=read(cached) if cached and cached.exists() else fetcher(url)
             rows=normalize(raw,market,day,members)
-            digest=hashlib.sha256(json.dumps(raw,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-            sources.append({'market':market,'date':day,'url':url,'sha256':digest,'status':'ok','rows':len(rows)})
+            encoded=json.dumps(raw,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()
+            digest=hashlib.sha256(encoded).hexdigest()
+            archive=output/'stock-institutional-sources'/day[:7]/(market+'-'+day+'-'+digest+'.json.gz')
+            archive.parent.mkdir(parents=True,exist_ok=True)
+            if archive.exists():
+                if gzip.decompress(archive.read_bytes())!=encoded:raise ValueError('Source archive integrity mismatch')
+            else:archive.write_bytes(gzip.compress(encoded,mtime=0))
+            previous=old_sources.get(market,{})
+            sources.append({'id':market,'market':market,'date':day,'url':url,'sha256':digest,'status':'ok','rows':len(rows),
+                            'path':archive.relative_to(output).as_posix(),'retrievedAt':previous.get('retrievedAt',now) if previous.get('sha256')==digest else now})
             all_rows.extend(enrich(output,rows,day))
         except Exception as exc:
-            errors.append(market+': '+str(exc)[:180]);sources.append({'market':market,'date':day,'url':url,'status':'unavailable','error':str(exc)[:180]})
-    path=output/'stock-institutional.json';old=read(path) if path.exists() else {'dates':[]}
-    if errors or len(set(dates))!=1:
-        result={**old,'status':'retained' if old.get('dates') else 'unavailable','checkedAt':now,'attemptSources':sources,
-                'error':'; '.join(errors) or 'Two market dates differ; no mixed-day report'}
-        save(path,result);return result
-    day=dates[0]
-    report={'schemaVersion':1,'date':day,'status':'ok','unit':'股','sources':sources,'rows':all_rows,
+            errors.append(market+': '+str(exc)[:180]);sources.append({'id':market,'market':market,'date':day,'url':url,'status':'unavailable','error':str(exc)[:180]})
+            blocked=getattr(exc,'code',None) in (401,403,429)
+            if blocked:break
+    if errors:return {'date':day,'status':'unavailable','sources':sources,'error':'; '.join(errors),'blocked':blocked}
+    report={'schemaVersion':2,'date':day,'status':'ok','unit':'股','sources':sources,'rows':all_rows,
+            'firstRecordedAt':old.get('firstRecordedAt') or now,'acquisitionMode':old.get('acquisitionMode') or mode,
+            'membership':{'date':directory.get('checkedDay'),'basis':'current-warrant-underlying-directory',
+                          'sha256':hashlib.sha256(json.dumps(sorted(members)).encode()).hexdigest()},
             'coverage':{'matchedStocks':len(all_rows),'directoryStocks':len(members),'missingStocks':sorted(members-{r['code'] for r in all_rows})},
             'limitations':['僅普通股權證標的，按本次名錄核對；上市與上櫃交易統計範圍依原報表，跨市場不直接合併排名。',
                            '外資不含外資自營商；自營商總額已含自行買賣與避險，分項不再重複加總。單位為股。',
                            '權證放量是同日並列觀察，無法識別同一投資人或證明因果、避險與交易意圖。',
-                           '歷史自串接後累積；缺資料不當零，樣本不足不計算預測或成本後交易績效。']}
+                           '歷史補抓採目前權證標的名錄，已退出名錄者可能未涵蓋，具有選樣偏差；保存時間不等於當時可得時間。',
+                           '現股漲跌要求前一交易日價格，不跨缺日補值；價格未還原，缺資料不當零。']}
+    return report
+
+
+def store_snapshot(output, report):
+    if report.get('status')!='ok':raise ValueError('Cannot publish unavailable institutional snapshot')
+    day=report['date'];path=output/'stock-institutional.json'
+    old=read(path) if path.exists() else {'dates':[]}
+    previous=read(output/'stock-institutional'/(day+'.json')) if day in old['dates'] else {}
+    if previous and previous!=report:
+        digest=hashlib.sha256(json.dumps(previous,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+        archive=output/'stock-institutional/revisions'/(day+'-'+digest+'.json')
+        if archive.exists() and read(archive)!=previous:raise ValueError('Institutional revision was modified')
+        save(archive,previous)
     save(output/'stock-institutional'/(day+'.json'),report)
-    result={'schemaVersion':1,'date':day,'latest':day,'dates':sorted(set(old.get('dates',[]))|{day})[-60:],
-            'status':'ok','error':None,'sources':sources,'coverage':report['coverage']}
+    dates=sorted(set(old.get('dates',[]))|{day});latest=dates[-1]
+    current=report if day==latest else read(output/'stock-institutional'/(latest+'.json'))
+    result={'schemaVersion':2,'date':latest,'latest':latest,'dates':dates,
+            'status':'ok','error':None,'sources':current['sources'],'coverage':current['coverage']}
+    if day<latest:
+        for key in ('status','error','checkedAt','attemptSources'):
+            if key in old:result[key]=old[key]
     save(path,result);return result
+
+
+def collect(output, cache=None, fetcher=fetch_public, now=None):
+    now=now or datetime.now(timezone.utc).isoformat(timespec='seconds')
+    feeds={s['id']:s for s in read(output/'manifest.json')['sources']}
+    dates={feeds[k]['date'] for k in ('twse-warrants','tpex-warrants')}
+    report=snapshot(output,next(iter(dates)),read(output/'stock-warrant-directory.json'),cache,fetcher,now) if len(dates)==1 else {'status':'unavailable','error':'Two market dates differ; no mixed-day report','sources':[]}
+    if report['status']!='ok':
+        path=output/'stock-institutional.json';old=read(path) if path.exists() else {'dates':[]}
+        result={**old,'status':'retained' if old.get('dates') else 'unavailable','checkedAt':now,
+                'attemptSources':report['sources'],'error':report['error']}
+        save(path,result);return result
+    return store_snapshot(output,report)
 
 
 if __name__=='__main__':

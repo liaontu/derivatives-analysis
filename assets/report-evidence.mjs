@@ -5,6 +5,12 @@ const tags = {volume:'成交量放大', spread:'Z 值異常', buy:'分點持續�
 export const safeReportPath = path => /^(daily-reports\/warrant-journal\/revisions\/[\w-]+|warrant-lab-reports\/[\w-]+)\.json$/.test(path || '');
 export const reportTime = value => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('zh-TW', {timeZone:'Asia/Taipei', dateStyle:'short', timeStyle:'short', hour12:false}).format(new Date(value)) + '（台灣）' : '—';
 
+export function institutionalPanel(data,{table,tr}){
+  if(!data?.leaders)return '';
+  return (data.missingVolumeDates?.length?`<p class="notice warning">缺權證量價日報日期：${esc(data.missingVolumeDates.join('、'))}；該日不能建立放量確認事件。</p>`:'')+Object.entries(data.leaders).map(([market,rows])=>`<h4>${esc(market)} 法人累計觀察</h4><p>外資淨股數絕對值前十名，單位為股；缺日不補零，淨股數不是買賣金額。</p>${table(['標的','有效／缺日','外資淨股數','投信淨股數','自營避險淨股數'],rows.map(r=>tr([esc(r.code+' '+r.name),`${r.days}／${r.missingDays}`,fmt(r.foreign),fmt(r.trust),fmt(r.dealerHedge)])))}`).join('')+
+    `<h4>本期到觀察日的法人訊號後五日價格變化</h4><p>僅計觀察日落在本期的事件；本期新訊號尚未到觀察日另計；價格未還原，不是交易損益。<a href="#stock-institutional?view=research">完整規則與 1／3／5 日回測 →</a></p>${table(['市場／規則','現股／權證有效','股／證價格變動中位數','等待／缺價／修訂'],(data.research||[]).map(r=>tr([esc(r.market+'／'+r.label),`${r.stockSamples}／${r.warrantSamples}`,`${pct(r.stockMedianPct)}／${pct(r.warrantMedianPct)}`,`${r.statuses.pending||0}／${r.statuses['missing-prices']||0}／${r.statuses['source-revised']||0}`])))}`;
+}
+
 export function evidencePanel(report, {table, tr}) {
   const q = report.quality;
   if (!q) return '<div class="notice warning">這是舊版封存報告，未保存逐項缺漏與有效樣本統計。請選擇最新版查看；不以目前資料回填舊版。</div>';
@@ -14,7 +20,7 @@ export function evidencePanel(report, {table, tr}) {
   const gaps = q.missing.filter(r => r.count > 0 && r.label !== '零成交').map(r => `${esc(r.label)} ${fmt(r.count)} ${esc(r.unit)}`).join('；');
   const imported = report.historyBackfill;
   const institutional=report.institutionalReview;
-  const institutionalNote=institutional?`<p class="notice">本期現股法人 ${fmt(institutional.days)} 個資料日、${fmt(institutional.stockDaySamples)} 個股日；同日股證可比較 ${fmt(institutional.pairedStockDaySamples)} 個股日。${esc(institutional.message)} <a href="#stock-institutional">查看法人與權證觀察 →</a></p>`:'';
+  const institutionalNote=institutional?`<p class="notice">本期現股法人 ${fmt(institutional.days)}／${fmt(institutional.expectedDays??institutional.days)} 個交易日、${fmt(institutional.stockDaySamples)} 個股日；同日股證可比較 ${fmt(institutional.pairedStockDaySamples)} 個股日。${esc(institutional.message)} ${institutional.missingDates?.length?'缺法人日報：'+esc(institutional.missingDates.join('、')):''} <a href="#stock-institutional">查看法人與權證觀察 →</a></p><details><summary>法人累計與本期事件回測明細</summary>${institutionalPanel(institutional,{table,tr})}</details>`:'';
   const importNote = imported ? `<div class="notice">上櫃官方歷史補入：<strong>${fmt(imported.days)} 個交易日、${fmt(imported.quoteRows)} 筆行情</strong>（含零成交），其中 ${fmt(imported.tradedRows)} 筆有有效成交價。<p>${esc(imported.basis)}</p><a href="data/derivatives/tpex-history-backfill.json" download>下載逐日來源、筆數與 SHA-256 →</a></div>` : '';
   const review = report.strategyReview;
   let strategy = '';

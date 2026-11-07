@@ -3,3 +3,4 @@ __pycache__/
 *.tmp
 *.json.gz
 !data/derivatives/research-inputs/**/*.json.gz
+!data/derivatives/stock-institutional-sources/**/*.json.gz

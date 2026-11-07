@@ -71,6 +71,16 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/stock_institutional.py
+      - name: Repair recent institutional history gaps within free source limits
+        id: institutional_history
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/institutional_history.py --max-days 2
+      - name: Update institutional trends and dated stock warrant event study
+        id: institutional_research
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/institutional_research.py
       - name: Update monthly spot and warrant relationships
         id: relationship
         if: steps.gate.outputs.run == 'true'
@@ -93,7 +103,7 @@ jobs:
         run: python automation/derivatives/derivative_reports.py --kind daily
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market derivative_daily=${{ steps.derivative_daily.outcome }} collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }} tpex_history=${{ steps.tpex_history.outcome }} stock_institutional=${{ steps.stock_institutional.outcome }}
+        run: python automation/derivatives/check_status.py market derivative_daily=${{ steps.derivative_daily.outcome }} collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }} tpex_history=${{ steps.tpex_history.outcome }} stock_institutional=${{ steps.stock_institutional.outcome }} institutional_history=${{ steps.institutional_history.outcome }} institutional_research=${{ steps.institutional_research.outcome }}
       - name: Measure data storage without rewriting history
         if: steps.gate.outputs.run == 'true'
         run: python automation/derivatives/storage_health.py
@@ -119,5 +129,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.derivative_daily.outcome == 'failure' || steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure' || steps.tpex_history.outcome == 'failure' || steps.stock_institutional.outcome == 'failure'
+        if: steps.derivative_daily.outcome == 'failure' || steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure' || steps.tpex_history.outcome == 'failure' || steps.stock_institutional.outcome == 'failure' || steps.institutional_history.outcome == 'failure' || steps.institutional_research.outcome == 'failure'
         run: exit 1

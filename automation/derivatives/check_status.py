@@ -13,6 +13,8 @@ ARTIFACTS = {
     'journal': ['daily-reports/warrant-journal/index.json'],
     'tpex_history': ['tpex-history-backfill.json'],
     'stock_institutional': ['stock-institutional.json'],
+    'institutional_history': ['stock-institutional-backfill.json'],
+    'institutional_research': ['stock-institutional-research.json'],
     'relationship': ['warrant-relationship/index.json'], 'signal_backtest': ['warrant-signal-backtest/outcomes.json'],
     'branches': ['warrant-branches.json'], 'coverage': ['stock-warrant-coverage.json'],
     'series': ['warrant-series-reports.json'], 'lab': ['warrant-lab.json'],

@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 6344,
-      "sha256": "b6c185ac8d17e2fd409db7e6154bee4c80ae3bd144db835aa237e8e9ae64d9aa"
+      "bytes": 7113,
+      "sha256": "68a98d0060f772b4e4ee7cd2405768923ff35fc04224d38207db6b7e4975a84e"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -33,8 +33,8 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 82,
-      "sha256": "6211fe9e65e93af2f566b145f308ad0b19ff83c21da090d7f057b718c43912cd"
+      "bytes": 141,
+      "sha256": "a79f29ffcc9290f003342c8c7f4ee44c3d88728b411fabd120c4a1a14926d1d4"
     },
     {
       "path": ".nojekyll",
@@ -43,8 +43,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 12072,
-      "sha256": "d8eb7fb86c08203c2c05b18de4a99ba34d423a86cd6fe8446a898d0719979973"
+      "bytes": 13130,
+      "sha256": "7efe6a8889e11a96a499961c7f33b9f55987b97d2df3cc0ef2083c46b61c1cee"
     },
     {
       "path": "assets/app.mjs",
@@ -118,13 +118,13 @@
     },
     {
       "path": "assets/pipeline-health.mjs",
-      "bytes": 4498,
-      "sha256": "64027bfc8f06df0160440d2859f76d17254f54e841e961a39ff52da351158a99"
+      "bytes": 4591,
+      "sha256": "28c86d363b8979d3e9ed1cd81c04cd8b06553eccf0f38eb164273f54b7a6f457"
     },
     {
       "path": "assets/report-evidence.mjs",
-      "bytes": 7763,
-      "sha256": "6a8a487dea8a74054cfdef71f7c7aa6c0635de67900424fab1ccac1dc81a9e0f"
+      "bytes": 9421,
+      "sha256": "d3061d465afa1fd11cd214b3882961ca7fa09854505e30e58bc5ad4aa1ecc02b"
     },
     {
       "path": "assets/series-reports.mjs",
@@ -143,8 +143,8 @@
     },
     {
       "path": "assets/stock-institutional.mjs",
-      "bytes": 4991,
-      "sha256": "e486a7d60d3b61cce768139f08a236002e24641bc7234233eabcf118e3e90f11"
+      "bytes": 10860,
+      "sha256": "87e5f5ad0eb5fbf853ccb9631f773e733e2d89d074a77a62b31ac59bce19318c"
     },
     {
       "path": "assets/stock-options.mjs",
@@ -203,8 +203,8 @@
     },
     {
       "path": "automation/derivatives/check_status.py",
-      "bytes": 6011,
-      "sha256": "dfff44d8d2a107e6362aa58ee28ede7573a78737243e164a1f18b64fd81bda78"
+      "bytes": 6148,
+      "sha256": "c4337da525bb44d233c01c601592577c438f5ee25ceae36d569e9fe2f85e3590"
     },
     {
       "path": "automation/derivatives/cloud_recovery.py",
@@ -237,6 +237,16 @@
       "sha256": "7ba4162bb2881538fd88134d0c254f4b307d72dcb0e50d24258638502358429f"
     },
     {
+      "path": "automation/derivatives/institutional_history.py",
+      "bytes": 5265,
+      "sha256": "b1aaf2fadbe635b91204bca8a7fe4590480c50029a86432478004a8bcffc44b8"
+    },
+    {
+      "path": "automation/derivatives/institutional_research.py",
+      "bytes": 17348,
+      "sha256": "961b8e6cd47b7d14243a47bd81b2527cb0cdf08c18f06c9c6b9deb4b59d8d462"
+    },
+    {
       "path": "automation/derivatives/option_history.py",
       "bytes": 17055,
       "sha256": "6acbe98d14b84862624c9cbd4fa2c300822ffe9105cf1d86164b52a35cdad87e"
@@ -248,8 +258,8 @@
     },
     {
       "path": "automation/derivatives/report_evidence.py",
-      "bytes": 18402,
-      "sha256": "b3d5ae9795fe96968ed3840ee601ecb45f8bb9884399f638ee7680847bddd0e5"
+      "bytes": 19578,
+      "sha256": "796fff34c9a6ae195faa961b50c76939c065a38c20a3fa8a53dff7fb497e3867"
     },
     {
       "path": "automation/derivatives/research_inputs.py",
@@ -263,8 +273,8 @@
     },
     {
       "path": "automation/derivatives/stock_institutional.py",
-      "bytes": 7042,
-      "sha256": "c8211a586f0c826fb3a486c28fad2dc16b59234f78f7c283c81e6eca4ff2370e"
+      "bytes": 10330,
+      "sha256": "af873bd177ae1f59e60feb030c5faf07f92e8717ac39391302491000450e746d"
     },
     {
       "path": "automation/derivatives/stock_options.py",

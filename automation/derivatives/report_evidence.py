@@ -36,15 +36,11 @@ def history_backfill(output, start=None, end=None):
 def institutional_review(output, start, end):
     index=read(output/'stock-institutional.json')
     if not index:return None
-    dates=[d for d in index.get('dates',[]) if start<=d<=end]
-    samples=paired=0
-    for day in dates:
-        snapshot=read(output/'stock-institutional'/(day+'.json'))
-        if snapshot.get('date')!=day or snapshot.get('status')!='ok':raise ValueError('Institutional report date mismatch')
-        samples+=len(snapshot['rows'])
-        paired+=sum(finite(r.get('stockPct')) and finite(r.get('volumeEligible')) and r['volumeEligible']>0 for r in snapshot['rows'])
-    return {'dates':dates,'days':len(dates),'stockDaySamples':samples,'pairedStockDaySamples':paired,
-            'message':'僅計本期保存的法人股數，與同日現股及權證量價配對；未收錄日期不補零。串接前的月份尚無法人歷史，不套用後來資料。分點與法人分類無法識別同一投資人。'}
+    try:
+        from .institutional_research import period_review
+    except ImportError:
+        from institutional_research import period_review
+    return period_review(output,start,end)
 
 
 def daily_report(output):
@@ -196,7 +192,13 @@ def quality_html(report):
     review = report.get('strategyReview')
     imported = report.get('historyBackfill')
     institutional = report.get('institutionalReview')
-    institution_note = (f'<p>本期現股法人：{institutional["days"]} 個資料日、{institutional["stockDaySamples"]:,} 個股日；其中 {institutional["pairedStockDaySamples"]:,} 個股日可與同日股證量價比較。{esc(institutional["message"])}</p>' if institutional else '')
+    institution_note = (f'<p>本期現股法人：{institutional["days"]}／{institutional.get("expectedDays", institutional["days"])} 個交易日、{institutional["stockDaySamples"]:,} 個股日；其中 {institutional["pairedStockDaySamples"]:,} 個股日可與同日股證量價比較。{esc(institutional["message"])}</p>' if institutional else '')
+    if institutional and institutional.get('missingDates'):institution_note+='<p>缺法人日報：'+esc('、'.join(institutional['missingDates']))+'</p>'
+    if institutional and institutional.get('leaders'):
+        if institutional.get('missingVolumeDates'):institution_note+='<p>缺權證量價日報日期：'+esc('、'.join(institutional['missingVolumeDates']))+'；該日不能建立放量確認事件。</p>'
+        for market,items in institutional['leaders'].items():
+            institution_note+=f'<h3>{esc(market)} 法人累計觀察（外資淨股數絕對值前十名）</h3><div class="scroll"><table><tr><th>標的</th><th>有效／缺日</th><th>外資淨股數</th><th>投信淨股數</th><th>自營避險淨股數</th></tr>'+''.join(f'<tr><td>{esc(r["code"]+" "+r["name"])}</td><td>{r["days"]}／{r["missingDays"]}</td><td>{r["foreign"]:,}</td><td>{r["trust"]:,}</td><td>{r["dealerHedge"]:,}</td></tr>' for r in items)+'</table></div>'
+        institution_note+='<h3>本期到觀察日的法人訊號後五日價格變化</h3><p>只計觀察日落在本期的事件；本期新訊號尚未到觀察日另計；價格未還原，不是交易損益。</p><div class="scroll"><table><tr><th>市場／規則</th><th>現股／權證有效樣本</th><th>價格變動中位數%（股／證）</th><th>等待／其他狀態</th></tr>'+''.join(f'<tr><td>{esc(r["market"]+"／"+r["label"])}</td><td>{r["stockSamples"]}／{r["warrantSamples"]}</td><td>{esc(round(r["stockMedianPct"],2) if r["stockMedianPct"] is not None else "—")}／{esc(round(r["warrantMedianPct"],2) if r["warrantMedianPct"] is not None else "—")}</td><td>{esc(str(r["statuses"]))}</td></tr>' for r in institutional.get('research',[]))+'</table></div>'
     import_note = (f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else '') + institution_note
     strategy = '<h3>本月策略檢查</h3><p>' + esc(review['message']) + '</p>' if review else ''
     if review and review.get('accounts'):
