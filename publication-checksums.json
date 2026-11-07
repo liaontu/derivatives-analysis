@@ -108,8 +108,8 @@
     },
     {
       "path": "assets/pipeline-health.mjs",
-      "bytes": 2703,
-      "sha256": "8c1dc802632d880f433794dd7ae9487ec570a7f68a7f8cc04e3db20de234bf43"
+      "bytes": 2713,
+      "sha256": "64eab8336af542e9516c5b258a348c339749690066c915ecda97234ac1efcdec"
     },
     {
       "path": "assets/series-reports.mjs",

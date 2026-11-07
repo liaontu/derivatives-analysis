@@ -10,7 +10,7 @@ export function latestModules(receipts) {
 export async function pipelineHealth({load,table,tr}) {
   const receipts=await Promise.all(['check-market','check-branches','check-series-reports'].map(k=>load(k).catch(()=>null)));
   const rows=latestModules(receipts);
-  const issues=Object.values(rows).filter(r=>r.outcome!=='success'||['retained','unavailable','failure','failed','error'].includes(r.status));
+  const issues=Object.values(rows).filter(r=>r.outcome!=='success'||['partial','retained','unavailable','failure','failed','error'].includes(r.status));
   const publication=receipts[2]?.publication;
   if(publication && publication.status!=='verified') issues.push({status:publication.status});
   return `<section class="panel pipeline-health"><h2>分析模組實際更新結果</h2><p class="${issues.length?'notice warning':'muted'}">${Object.keys(rows).length?issues.length?`${issues.length} 個步驟未確認成功，已保留既有資料；請查看原因。`:'最近記錄的分析步驟已完成；資料日仍以各報告為準。':'新版逐項檢查紀錄尚未產生，不能據此宣稱全部分析已更新。'}</p>
