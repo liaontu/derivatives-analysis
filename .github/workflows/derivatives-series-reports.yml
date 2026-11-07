@@ -1,13 +1,13 @@
 name: derivatives-series-reports
 on:
   schedule:
-    # Saturday 12:00 Taipei: Friday's Taiwan data arrives in the evening runs of derivatives-daily;
+    # Saturday 09:10 Taipei, with an 11:10 recovery check after the morning data run.
     # the weekly report runs every Saturday and the monthly one on the first Saturday of the month.
-    - cron: '0 4 * * 6'
+    - cron: '10 1,3 * * 6'
   workflow_dispatch:
     inputs:
       kind:
-        description: 'auto (weekly, plus monthly on the 1st-7th), weekly, monthly or both'
+        description: 'auto (weekly, plus monthly on the 1st-7th), daily, weekly, monthly or both'
         default: 'auto'
       today:
         description: 'Run as if on this Taipei date (YYYY-MM-DD); blank = today'

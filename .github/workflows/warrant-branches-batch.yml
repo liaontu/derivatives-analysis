@@ -71,6 +71,11 @@ jobs:
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
         continue-on-error: true
         run: python automation/derivatives/warrant_relationship.py
+      - name: Refresh daily warrant and stock brief
+        id: report_brief
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_series_reports.py --kind daily
       - name: Update broker signal event study
         id: signal_backtest
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
@@ -78,7 +83,7 @@ jobs:
         run: python automation/derivatives/warrant_signal_backtest.py
       - name: Record actual ranking check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py branches branches=${{ steps.collect.outcome }} coverage=${{ steps.coverage.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }}
+        run: python automation/derivatives/check_status.py branches branches=${{ steps.collect.outcome }} coverage=${{ steps.coverage.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }}
       - name: Commit rankings and source status
         id: commit
         run: |
@@ -88,6 +93,7 @@ jobs:
           if [ -d data/derivatives/warrant-signal-backtest ]; then git add data/derivatives/warrant-signal-backtest/; fi
           if [ -d data/derivatives/warrant-relationship ]; then git add data/derivatives/warrant-relationship/; fi
           if [ -d data/derivatives/daily-reports/warrant-journal ]; then git add data/derivatives/daily-reports/warrant-journal/; fi
+          if [ -f data/derivatives/warrant-series-reports.json ]; then git add data/derivatives/warrant-series-reports.json data/derivatives/warrant-series-reports/; fi
           if [ -f data/derivatives/check-branches.json ]; then git add data/derivatives/check-branches.json; fi
           if [ -f data/derivatives/stock-warrant-coverage.json ]; then git add data/derivatives/stock-warrant-coverage.json; fi
           if [ -f data/derivatives/trading-calendar.json ]; then
@@ -108,5 +114,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.coverage.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure'
         run: exit 1

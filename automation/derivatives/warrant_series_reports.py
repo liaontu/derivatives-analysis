@@ -18,11 +18,13 @@ from statistics import median
 if __package__:
     from .publication import save_text
     from .trading_calendar import load_calendar
+    from .report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review
 else:
     from publication import save_text
     from trading_calendar import load_calendar
+    from report_evidence import daily_report, daily_html, period_quality, quality_html, strategy_review, followup_review
 
-RULES = {'version': 'warrant-series-v1', 'liquidShare': 0.8, 'liquidMinDays': 3, 'minPairs': 10,
+RULES = {'version': 'warrant-series-v2', 'liquidShare': 0.8, 'liquidMinDays': 3, 'minPairs': 10,
          'topUnderlyings': 30, 'topWarrants': 5,
          # Fixed thresholds behind the readings: |median underlying move| (%, small/clear/large), correlation
          # (low/mid/high), direction-consistency share (%), liquid share of listed warrants (%),
@@ -42,7 +44,7 @@ LIMITATIONS = [
     '斜率是權證日報酬對標的日報酬的最小平方法係數，只在配對段數達門檻時計算，且未扣除時間價值衰減與條款調整。',
     '報告不比較策略、不預測，也不構成任何買賣建議；同一期間內容改變另存新版，舊版本保留。',
 ]
-KIND_NAMES = {'weekly': '週報', 'monthly': '月報'}
+KIND_NAMES = {'daily': '日報', 'weekly': '週報', 'monthly': '月報'}
 SAFE_CODE = re.compile(r'[A-Za-z0-9_-]{1,24}')
 
 
@@ -126,7 +128,7 @@ def side_summary(items, with_slopes):
     """Describe one side (calls or puts) of an underlying's liquid warrants."""
     returns = [w['returnPct'] for w in items if numeric(w['returnPct'])]
     flags = [w['consistent'] for w in items if w['consistent'] is not None]
-    summary = {'liquid': len(items), 'returns': len(returns),
+    summary = {'liquid': len(items), 'returns': len(returns), 'consistentSamples': len(flags),
                'medianReturnPct': rounded(median(returns)) if returns else None,
                'consistentShare': rounded(100 * sum(flags) / len(flags)) if flags else None}
     if with_slopes:
@@ -154,18 +156,26 @@ def analyse_underlying(history, start, end, want_slopes, days_traded, volume_by_
     warrants, markets = [], Counter()
     listed = traded = liquid = 0
     volume = 0
+    coverage = Counter()
+    market_days = defaultdict(set)
+    period_dates = [d for d in dates if start <= d <= end]
+    coverage['missingSpotDays'] = sum(d not in prices for d in period_dates)
     for code, q in quotes.items():
         rows = sorted(q['rows'])
         in_period = [r for r in rows if start <= r[0] <= end]
         if not in_period:
             continue
+        market_days[q.get('market') or '?'].update(r[0] for r in in_period)
         markets[q.get('market')] += 1
         listed += 1
-        traded_rows = [r for r in in_period if positive(r[1])]
+        traded_rows = [r for r in in_period if positive(r[1]) and positive(r[2])]
+        coverage['missingVolumeRows'] += sum(not numeric(r[2]) for r in in_period)
+        coverage['zeroVolumeRows'] += sum(r[2] == 0 for r in in_period)
+        coverage['missingTradedPriceRows'] += sum(positive(r[2]) and not positive(r[1]) for r in in_period)
         w_volume = sum(r[2] for r in in_period if numeric(r[2]))
         volume += w_volume
         for r in in_period:
-            if positive(r[1]):
+            if positive(r[1]) and positive(r[2]):
                 days_traded[r[0]] += 1
             if numeric(r[2]):
                 volume_by_day[r[0]] += r[2]
@@ -174,12 +184,13 @@ def analyse_underlying(history, start, end, want_slopes, days_traded, volume_by_
         traded += 1
         is_liquid = len(traded_rows) >= RULES['liquidMinDays'] and len(traded_rows) >= RULES['liquidShare'] * len(in_period)
         liquid += is_liquid
-        prior = [r for r in rows if r[0] < start and positive(r[1])]
+        prior = [r for r in rows if r[0] < start and positive(r[1]) and positive(r[2])]
         w_pct = pct(traded_rows[-1][1], prior[-1][1]) if prior else None
+        matched_stock_pct = pct(prices.get(traded_rows[-1][0]), prices.get(prior[-1][0])) if prior else None
         slope = corr = None
         pairs = 0
         if want_slopes:
-            seq = [r for r in rows if r[0] <= end and positive(r[1]) and r[0] in prices and (base_day is None or r[0] >= base_day)]
+            seq = [r for r in rows if r[0] <= end and positive(r[1]) and positive(r[2]) and r[0] in prices and (base_day is None or r[0] >= base_day)]
             paired = [(pct(prices[b[0]], prices[a[0]]), pct(b[1], a[1])) for a, b in zip(seq, seq[1:]) if start <= b[0] <= end]
             pairs = len(paired)
             if pairs >= RULES['minPairs']:
@@ -187,7 +198,8 @@ def analyse_underlying(history, start, end, want_slopes, days_traded, volume_by_
         warrants.append({'code': code, 'name': q.get('name'), 'cp': q.get('cp'), 'strike': q.get('strike'), 'expiry': q.get('expiry'),
                          'listedDays': len(in_period), 'tradedDays': len(traded_rows), 'volume': w_volume, 'liquid': is_liquid,
                          'returnPct': rounded(w_pct), 'baseDate': prior[-1][0] if prior else None, 'endDate': traded_rows[-1][0],
-                         'consistent': consistent(w_pct, u_pct, q.get('cp')), 'pairs': pairs,
+                         'matchedStockReturnPct': rounded(matched_stock_pct),
+                         'consistent': consistent(w_pct, matched_stock_pct, q.get('cp')), 'pairs': pairs,
                          'slope': rounded(slope, 3), 'corr': rounded(corr, 3)})
     liquid_items = [w for w in warrants if w['liquid']]
     return {'code': history['underlying'], 'name': history.get('name') or history['underlying'],
@@ -195,6 +207,7 @@ def analyse_underlying(history, start, end, want_slopes, days_traded, volume_by_
             'underlyingReturnPct': rounded(u_pct), 'baseDate': u_base, 'endDate': u_end,
             'baseBeforePeriod': bool(priced_before) if u_base else None, 'pricedDays': len(priced_in),
             'warrants': listed, 'traded': traded, 'liquid': liquid, 'volume': volume,
+            'coverage': {'counts': dict(coverage), 'dataDays': period_dates, 'marketDays': {k: sorted(v) for k, v in market_days.items()}},
             'call': side_summary([w for w in liquid_items if w['cp'] == 'C'], want_slopes),
             'put': side_summary([w for w in liquid_items if w['cp'] == 'P'], want_slopes),
             '_warrants': warrants}
@@ -204,12 +217,16 @@ def build_report(output, kind, start, end):
     calendar = load_calendar(output)
     days = trading_days(calendar, start, end)
     index = read_json(output / 'warrant-history.json') or {'items': []}
+    universe = read_json(output / 'stock-warrant-directory.json')
+    if not universe or universe.get('status') != 'ok' or not universe.get('items'):
+        raise ValueError('等待可核對的個股名錄；不以代碼猜測股票或 ETF')
+    stock_codes = {item['code'] for item in universe['items']}
     days_traded, volume_by_day = Counter(), Counter()
     underlyings = []
     start_key, end_key = start.isoformat(), end.isoformat()
     for item in index.get('items', []):
         code = item.get('code', '')
-        if not SAFE_CODE.fullmatch(code):
+        if not SAFE_CODE.fullmatch(code) or code not in stock_codes:
             continue
         history = read_json(output / 'warrant-history' / f'{code}.json')
         if not history or history.get('underlying') != code:
@@ -243,9 +260,14 @@ def build_report(output, kind, start, end):
         if rank < RULES['topUnderlyings']:
             u['topWarrants'] = sorted(ws, key=lambda w: (-w['volume'], w['code']))[:RULES['topWarrants']]
     previous = previous_report(output, kind, start_key)
-    report = {'schemaVersion': 1, 'kind': kind, 'period': {'start': start_key, 'end': end_key},
+    report = {'schemaVersion': 2, 'kind': kind, 'period': {'start': start_key, 'end': end_key},
               'rules': RULES, 'historyLimit': index.get('limit'), 'market': market, 'underlyings': underlyings,
               'previous': previous, 'limitations': LIMITATIONS}
+    report['quality'] = period_quality(report, universe)
+    report['followupReview'] = followup_review(output, start_key, end_key)
+    report['status'] = 'partial' if market['missingDays'] else 'ok' if market['dataDays'] else 'missing'
+    if kind == 'monthly':
+        report['strategyReview'] = strategy_review(output, end_key)
     top = [dict(w, underlying=u['code'], underlyingName=u['name']) for u in underlyings for w in u.get('topWarrants', [])]
     report['topWarrants'] = sorted(top, key=lambda w: (-w['volume'], w['code']))[:RULES['topWarrants'] * 2]
     report['observations'] = observations(report)
@@ -321,7 +343,7 @@ def previous_report(output, kind, start_key):
         return None
     last = max(candidates, key=lambda i: (i['periodEnd'], i['id']))
     saved = read_json(output / 'warrant-series-reports' / f"{last['id']}.json")
-    if not saved:
+    if not saved or saved.get('rules', {}).get('version') != RULES['version']:
         return None
     m = saved['market']
     return {'id': last['id'], 'period': saved['period'],
@@ -458,6 +480,8 @@ def watch_html(report, esc):
 
 
 def report_html(report):
+    if report['kind'] == 'daily':
+        return daily_html(report)
     esc = lambda value: escape(str(value), quote=True)
     m = report['market']
     kind_name = KIND_NAMES.get(report['kind'], report['kind'])
@@ -495,6 +519,7 @@ def report_html(report):
     return f'''<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>權證時間序列{esc(kind_name)} {esc(report['id'])}</title>
 <style>:root{{color-scheme:light}}body{{margin:0;background:#f4f7f2;color:#1f332e;font:16px/1.7 Inter,"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}}main{{max-width:1200px;margin:auto;padding:32px 24px 40px}}.eyebrow{{color:#586b62;letter-spacing:.2em;font-size:.75rem;font-weight:600;margin:0 0 6px}}h1,h2{{margin:0;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;font-weight:700;line-height:1.45}}h1{{font-size:2rem;letter-spacing:.06em}}h2{{font-size:1.2rem;letter-spacing:.03em;margin-bottom:10px}}h3{{font-size:1rem;margin:18px 0 4px}}.meta{{color:#4a5f57;font-size:.92rem}}p{{margin:.4em 0}}p:empty{{display:none}}ul{{margin:.4em 0;padding-left:1.4em}}li{{margin:.25em 0}}section{{background:#fff;border:1px solid #dfe7e0;border-radius:14px;padding:22px 24px;margin:22px 0}}.scroll{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap;font-size:.9rem;font-variant-numeric:tabular-nums}}th,td{{text-align:left;padding:10px;border-bottom:1px solid #dfe7e0}}th{{color:#4a5f57;font-size:.8rem;font-weight:500;border-bottom-color:#c9d6cd}}small{{display:block;margin-top:10px;color:#586b62;font-size:.8rem;overflow-wrap:anywhere}}@media (max-width:600px){{main{{padding:24px 14px 32px}}section{{padding:18px 16px}}h1{{font-size:1.7rem}}}}@media print{{body{{background:#fff;color:#000}}main{{padding:0}}section{{border-color:#bbb;break-inside:avoid}}.scroll{{overflow:visible}}table{{white-space:normal;font-size:10px}}}}</style>
 <main><p class="eyebrow">衍生視界 · 權證與標的收盤序列</p><h1>權證時間序列{esc(kind_name)}</h1><p class="meta">期間 {esc(report['period']['start'])} 至 {esc(report['period']['end'])} · 版本 {esc(report['id'])} · 資料至 {esc(m['dataDays'][-1] if m['dataDays'] else '尚無資料')}</p>
+{quality_html(report)}
 <section><h2>本期觀察</h2><ul>{''.join('<li>' + esc(t) + '</li>' for t in report['observations'])}</ul></section>
 <section><h2>本期判讀</h2><p>依固定門檻自動產生：說明每個數字的含義與相對大小，不是預測或建議。門檻見「方法與限制」。</p><ul>{''.join('<li>' + esc(t) + '</li>' for t in report.get('readings', []))}</ul></section>
 {watch_html(report, esc)}
@@ -532,8 +557,11 @@ def archive(output, content, now):
         index['items'].append({'id': report_id, 'kind': content['kind'], 'periodStart': content['period']['start'],
                                'periodEnd': content['period']['end'], 'dataThrough': content['market']['dataDays'][-1] if content['market']['dataDays'] else None,
                                'dataDays': len(content['market']['dataDays']), 'generatedAt': now, 'contentSha256': content_sha})
-    index['latest'][content['kind']] = report['id']
-    index.update(status='ok', error=None)
+    latest_item = next((i for i in index['items'] if i['id'] == index['latest'].get(content['kind'])), None)
+    if not latest_item or latest_item['periodEnd'] <= content['period']['end']:
+        index['latest'][content['kind']] = report['id']
+    index.setdefault('errors', {}).pop(content['kind'], None)
+    index.update(status='retained' if index['errors'] else 'ok', error='; '.join(index['errors'].values()) or None)
     save_json(path, index)
     return report
 
@@ -543,18 +571,25 @@ def run(output, today, kind, now):
     results, errors = [], []
     for name in kinds_for(today, kind):
         try:
-            start, end = periods[name](today)
-            results.append(archive(output, build_report(output, name, start, end), now))
+            if name == 'daily':
+                content = daily_report(output)
+            else:
+                start, end = periods[name](today)
+                content = build_report(output, name, start, end)
+            if not content['market']['dataDays']:
+                raise ValueError('本期沒有已收錄的交易日，保留上期報告')
+            results.append(archive(output, content, now))
         except Exception as exc:  # keep older reports readable and record the failure
             path = output / 'warrant-series-reports.json'
             index = read_json(path) or {'schemaVersion': 1, 'items': [], 'latest': {}}
+            index.setdefault('errors', {})[name] = str(exc)[:300]
             index.update(status='retained', error=f'{name}: {exc}')
             save_json(path, index)
             errors.append(f'{name}: {exc}')
     if errors:
         path = output / 'warrant-series-reports.json'
         index = read_json(path) or {'schemaVersion': 1, 'items': [], 'latest': {}}
-        index.update(status='retained', error='; '.join(errors))
+        index.update(status='retained', error='; '.join(index.get('errors', {}).values()))
         save_json(path, index)
     return results, errors
 
@@ -562,7 +597,7 @@ def run(output, today, kind, now):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data', type=Path, default=Path('data/derivatives'))
-    parser.add_argument('--kind', choices=['auto', 'weekly', 'monthly', 'both'], default='auto')
+    parser.add_argument('--kind', choices=['auto', 'daily', 'weekly', 'monthly', 'both'], default='auto')
     parser.add_argument('--today', help='Taipei date (YYYY-MM-DD) to run as if on that day')
     parser.add_argument('--now', help='generation timestamp (ISO 8601 UTC) for reproducible runs')
     args = parser.parse_args(argv)
@@ -571,7 +606,7 @@ def main(argv=None):
     now = args.now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     results, errors = run(args.data, today, args.kind, now)
     for report in results:
-        print(f"{report['id']}: {report['period']['start']}..{report['period']['end']}, {len(report['market']['dataDays'])} data days, {report['market']['liquid']} liquid warrants")
+        print(f"{report['id']}: {report['period']['start']}..{report['period']['end']}, {len(report['market']['dataDays'])} data days")
     if errors:
         raise SystemExit('; '.join(errors))
 

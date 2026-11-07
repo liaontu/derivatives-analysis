@@ -66,6 +66,11 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_relationship.py
+      - name: Archive daily warrant and stock brief
+        id: report_brief
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_series_reports.py --kind daily
       - name: Update broker signal event study
         id: signal_backtest
         if: steps.gate.outputs.run == 'true'
@@ -73,7 +78,7 @@ jobs:
         run: python automation/derivatives/warrant_signal_backtest.py
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }}
+        run: python automation/derivatives/check_status.py market collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }}
       - name: Commit data and source status
         id: commit
         run: |
@@ -96,5 +101,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure'
+        if: steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure'
         run: exit 1

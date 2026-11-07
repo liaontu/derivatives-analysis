@@ -1,7 +1,8 @@
 import { esc, fmt, finite } from './model.mjs';
+import {dailyPanel, evidencePanel, reportTime} from './report-evidence.mjs';
 
-export const validSeriesReportId = id => /^(weekly|monthly)-\d{4}-\d{2}(-\d{2})?-r\d+-[a-f0-9]{8}$/.test(id || '');
-const kindNames = { weekly: '週報', monthly: '月報' };
+export const validSeriesReportId = id => /^(?:(daily|weekly)-\d{4}-\d{2}-\d{2}|monthly-\d{4}-\d{2})-r\d+-[a-f0-9]{8}$/.test(id || '');
+const kindNames = { daily: '日報', weekly: '週報', monthly: '月報' };
 const num = (x, digits = 2, suffix = '') => finite(x) ? `${fmt(x, digits)}${suffix}` : '—';
 const signedPct = x => finite(x) ? `<span class="${x > 0 ? 'positive' : x < 0 ? 'negative' : ''}">${x > 0 ? '+' : ''}${fmt(x, 2)}%</span>` : '—';
 const plainPct = x => finite(x) ? `${x > 0 ? '+' : ''}${fmt(x, 2)}%` : '—';
@@ -12,7 +13,14 @@ const level = (value, cuts, labels) => labels[cuts.filter(c => value >= c).lengt
 
 export function reportLabel(item) {
   const kind = kindNames[item.kind] || item.kind, revision = (item.id.match(/-r(\d+)-/) || [])[1] || '?';
-  return item.kind === 'monthly' ? `${kind} ${item.periodEnd.slice(0, 7)} · 第 ${revision} 版` : `${kind} ${item.periodStart}～${item.periodEnd.slice(5)} · 第 ${revision} 版`;
+  return item.kind === 'monthly' ? `${kind} ${item.periodEnd.slice(0, 7)} · 第 ${revision} 版` : item.kind === 'daily' ? `${kind} ${item.periodEnd} · 第 ${revision} 版` : `${kind} ${item.periodStart}～${item.periodEnd.slice(5)} · 第 ${revision} 版`;
+}
+
+export function reportChoices(index, kind, requested) {
+  const items = (index?.items || []).filter(i => i.kind === kind && validSeriesReportId(i.id)).slice().reverse();
+  const preferred = index?.latest?.[kind];
+  const chosen = items.some(i => i.id === requested) ? requested : items.some(i => i.id === preferred) ? preferred : items[0]?.id || '';
+  return {items, chosen};
 }
 
 // Find one underlying by code or name: exact code, exact name, then a unique prefix or substring match.
@@ -71,7 +79,7 @@ export function stockReadings(report, u) {
 }
 
 export function createSeriesReports({ load, table, tr, select, metric, empty }) {
-  const state = { id: '', stock: '', error: '' };
+  const state = { id: '', kind: 'daily', stock: '', error: '' };
 
   function watchSection(report, monthly) {
     const watch = report.watch;
@@ -105,28 +113,34 @@ export function createSeriesReports({ load, table, tr, select, metric, empty }) 
 
   async function page() {
     const index = await load('warrant-series-reports').catch(() => null);
-    const items = (index?.items || []).filter(i => validSeriesReportId(i.id)).slice().reverse();
-    const latest = index?.latest || {};
-    const chosen = items.some(i => i.id === state.id) ? state.id : (latest.weekly && items.some(i => i.id === latest.weekly) ? latest.weekly : items[0]?.id || '');
+    const query = new URLSearchParams(location.hash.split('?')[1]);
+    const kind = Object.hasOwn(kindNames, query.get('kind')) ? query.get('kind') : index?.latest?.daily ? 'daily' : 'weekly';
+    state.kind = kind;
+    const {items, chosen} = reportChoices(index, kind, query.get('report') || '');
     const picker = select('series-report-id', '報告', items.map(i => i.id), chosen, id => reportLabel(items.find(i => i.id === id)));
-    const header = `<section class="panel series-report"><div class="panel-head"><div><span class="eyebrow">WARRANT SERIES REPORTS</span><h2>權證與標的收盤序列</h2><p class="muted">每週六整理週一至週五 · 每月第一個週六整理上一個月 · 同期間改版保留舊版 · 免費下載</p></div>${items.length ? picker : ''}</div>`;
-    const warning = index?.status === 'retained' ? `<div class="notice warning">${esc(index.error || '本次報告未更新，以下保留舊版本。')}</div>` : '';
-    if (!chosen) return header + warning + empty('尚無可讀取的週報或月報；等待週六排程產生。') + '</section>';
+    const tabs = Object.entries(kindNames).map(([key,label]) => `<a class="tag ${key === kind ? 'selected' : ''}" ${key === kind ? 'aria-current="page"' : ''} href="#series-report?kind=${key}">${label}</a>`).join('');
+    const header = `<section class="panel series-report"><div class="panel-head"><div><span class="eyebrow">WARRANT & STOCK REPORTS</span><h2>權證與現股分析報告</h2><p class="muted">交易日更新後整理日報 · 週六上午週報 · 每月第一個週六上月月報<br>免費固定規則 · 無新資料不重複發報 · 修訂保留舊版</p></div>${items.length ? picker : ''}</div><nav class="report-tabs" aria-label="報告週期">${tabs}</nav>`;
+    const warning = index?.errors?.[kind] || (!index?.errors && index?.status === 'retained' ? index.error : '');
+    const notice = warning ? `<div class="notice warning">本次${kindNames[kind]}未更新，保留前次報告：${esc(warning)}</div>` : '';
+    if (!chosen) return header + notice + empty('尚無可讀取的' + kindNames[kind] + '；等待對應排程產生。') + '</section>';
     const report = await load(`warrant-series-reports/${chosen}`).catch(() => null);
-    if (!report || !validSeriesReportId(report.id)) return header + warning + empty('報告檔暫時無法讀取。') + '</section>';
+    if (!report || !validSeriesReportId(report.id) || report.kind !== kind) return header + notice + empty('報告檔暫時無法讀取。') + '</section>';
     const m = report.market, monthly = report.kind === 'monthly';
     const base = `data/derivatives/warrant-series-reports/${report.id}`;
-    const metrics = `<div class="metrics">${metric('資料日', `${m.dataDays.length}<small>／交易日曆 ${m.tradingDays.length} 天</small>`, m.missingDays.length ? `缺 ${m.missingDays.join('、')}` : '期間資料齊全')}${metric('常交易權證', fmt(m.liquid), `曾掛牌 ${fmt(m.warrants)}・曾成交 ${fmt(m.traded)}`)}${metric('標的報酬中位數', signedPct(m.underlyingReturn.medianPct), `${fmt(m.underlyingReturn.count)} 個標的有期間報酬`)}${metric('常交易認購／認售中位報酬', `${signedPct(m.call.medianReturnPct)}<i>/</i>${signedPct(m.put.medianReturnPct)}`, `${fmt(m.call.returns)}／${fmt(m.put.returns)} 檔有期間報酬`)}</div>`;
+    const meta = `<p>${esc(kindNames[report.kind])} · 期間 ${esc(report.period.start)}～${esc(report.period.end)} · <strong>資料至 ${esc(m.dataDays.at(-1) || '尚無資料')}</strong><br>本版保存 ${esc(reportTime(report.generatedAt))} · ${esc(report.rules.version)}</p>`;
+    const download = `<p><a href="${base}.html" target="_blank" rel="noopener noreferrer">開啟完整報告／列印 PDF ↗</a> · <a href="${base}.html" download>下載 HTML</a> · <a href="${base}.json" download>下載 JSON</a></p>`;
+    if (kind === 'daily') return header + notice + meta + download + dailyPanel(report, {table,tr,metric}) + '</section>';
+    const metrics = `<div class="metrics">${metric('資料日', `${m.dataDays.length}<small>／交易日曆 ${m.tradingDays.length} 天</small>`, m.missingDays.length ? `缺 ${m.missingDays.join('、')}` : '每日均有部分紀錄；逐欄缺漏見上方')}${metric('常交易權證', fmt(m.liquid), `曾掛牌 ${fmt(m.warrants)}・曾成交 ${fmt(m.traded)}`)}${metric('標的報酬中位數', signedPct(m.underlyingReturn.medianPct), `${fmt(m.underlyingReturn.count)} 個標的有期間報酬`)}${metric('常交易認購／認售中位報酬', `${signedPct(m.call.medianReturnPct)}<i>/</i>${signedPct(m.put.medianReturnPct)}`, `${fmt(m.call.returns)}／${fmt(m.put.returns)} 檔有期間報酬`)}</div>`;
     const headers = ['標的', '市場', '標的報酬', '基準日', '掛牌／成交／常交易', '成交量（張）', '認購中位報酬', '認售中位報酬', '認購同向', '認售反向', ...(monthly ? ['認購斜率（檔）', '認售斜率（檔）'] : [])];
     const rows = report.underlyings.slice(0, 15).map(u => tr([`<a class="text-link" href="#series-report" data-series-stock="${esc(u.code)}">${esc(u.code)} ${esc(u.name)}</a>`, esc(u.market || '—'), signedPct(u.underlyingReturnPct), `${esc(u.baseDate || '—')}${u.baseDate && !u.baseBeforePeriod ? '<small>期間內</small>' : ''}`, `${u.warrants}／${u.traded}／${u.liquid}`, fmt(u.volume), signedPct(u.call.medianReturnPct), signedPct(u.put.medianReturnPct), num(u.call.consistentShare, 0, '%'), num(u.put.consistentShare, 0, '%'), ...(monthly ? [`${num(u.call.medianSlope, 3)}（${u.call.slopes}）`, `${num(u.put.medianSlope, 3)}（${u.put.slopes}）`] : [])]));
     const topHeaders = ['權證', '標的', '權別', '履約價', '到期日', '成交日／掛牌日', '成交量（張）', '期間報酬', ...(monthly ? ['斜率', '相關', '配對段數'] : [])];
     const topRows = report.topWarrants.map(w => tr([`${esc(w.code)} ${esc(w.name)}`, `<a class="text-link" href="#series-report" data-series-stock="${esc(w.underlying)}">${esc(w.underlying)} ${esc(w.underlyingName)}</a>`, sideLabel(w.cp), num(w.strike), esc(w.expiry || '—'), `${w.tradedDays}／${w.listedDays}`, fmt(w.volume), signedPct(w.returnPct), ...(monthly ? [num(w.slope, 3), num(w.corr, 3), String(w.pairs)] : [])]));
     const previous = report.previous ? `<p class="muted">上一期：${esc(report.previous.id)}（${esc(report.previous.period.start)}～${esc(report.previous.period.end)}）常交易 ${fmt(report.previous.market.liquid)} 檔、成交量 ${fmt(report.previous.market.volume)} 張。兩期樣本不同，差異不代表趨勢。</p>` : '';
-    return header + warning + `<p>${esc(kindNames[report.kind] || report.kind)} · 期間 ${esc(report.period.start)}～${esc(report.period.end)} · 資料至 ${esc(m.dataDays.at(-1) || '尚無資料')} · ${esc(report.rules.version)}</p>${metrics}<h3>本期觀察</h3><ul>${report.observations.map(t => `<li>${esc(t)}</li>`).join('')}</ul><h3>本期判讀</h3><p class="muted">依固定門檻自動產生，說明數字的含義與相對大小；不是預測或建議。</p><ul>${(report.readings || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul>${watchSection(report, monthly)}${previous}<p><a class="text-link" href="${base}.html" target="_blank" rel="noopener noreferrer">開啟完整報告 ↗</a> · <a href="${base}.html" download>下載 HTML 報告</a> · <a href="${base}.json" download>下載核對資料 JSON</a></p><p class="note">常交易：期間內成交日佔掛牌日 ${Math.round(report.rules.liquidShare * 100)}% 以上且至少 ${report.rules.liquidMinDays} 天。期間報酬以最後成交收盤對基準日（期間前最後一個資料日）收盤；標示「期間內」表示歷史不足。${monthly ? `斜率為權證日報酬對標的日報酬的最小平方法係數，配對段數至少 ${report.rules.minPairs} 段才計算。` : ''}同一標的的權證共用行情，不是獨立樣本。</p>${stockPanel(report, monthly)}<h3>標的比較（成交量前 15 名，完整 ${report.underlyings.length} 個見 JSON；點標的可查看個股）</h3>${table(headers, rows)}<h3>成交量最大的常交易權證</h3>${table(topHeaders, topRows)}<details><summary>報告限制與核對紀錄</summary><ul>${report.limitations.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="note">生成時間 ${esc(report.generatedAt)} · 內容 SHA-256：<code>${esc(report.contentSha256)}</code></p></details></section>`;
+    return header + notice + meta + `${evidencePanel(report, {table,tr})}${metrics}<h3>本期觀察</h3><ul>${report.observations.map(t => `<li>${esc(t)}</li>`).join('')}</ul><h3>本期判讀</h3><p class="muted">依固定門檻自動產生，說明數字的含義與相對大小；不是預測或建議。</p><ul>${(report.readings || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul>${watchSection(report, monthly)}${previous}<p><a class="text-link" href="${base}.html" target="_blank" rel="noopener noreferrer">開啟完整報告 ↗</a> · <a href="${base}.html" download>下載 HTML 報告</a> · <a href="${base}.json" download>下載核對資料 JSON</a></p><p class="note">常交易：期間內成交日佔掛牌日 ${Math.round(report.rules.liquidShare * 100)}% 以上且至少 ${report.rules.liquidMinDays} 天。期間報酬以最後成交收盤對基準日（期間前最後一個資料日）收盤；標示「期間內」表示歷史不足。${monthly ? `斜率為權證日報酬對標的日報酬的最小平方法係數，配對段數至少 ${report.rules.minPairs} 段才計算。` : ''}同一標的的權證共用行情，不是獨立樣本。</p>${stockPanel(report, monthly)}<h3>標的比較（成交量前 15 名，完整 ${report.underlyings.length} 個見 JSON；點標的可查看個股）</h3>${table(headers, rows)}<h3>成交量最大的常交易權證</h3>${table(topHeaders, topRows)}<details><summary>報告限制與核對紀錄</summary><ul>${report.limitations.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="note">生成時間 ${esc(report.generatedAt)} · 內容 SHA-256：<code>${esc(report.contentSha256)}</code></p></details></section>`;
   }
 
   function bind(rerender) {
-    document.getElementById('series-report-id')?.addEventListener('change', event => { state.id = event.target.value; rerender(); });
+    document.getElementById('series-report-id')?.addEventListener('change', event => { state.id = event.target.value; location.hash = '#series-report?kind=' + state.kind + '&report=' + encodeURIComponent(state.id); });
     const form = document.getElementById('series-stock-form');
     form?.addEventListener('submit', event => { event.preventDefault(); state.stock = form.elements['series-stock'].value.trim(); rerender(); });
     document.querySelectorAll('[data-series-stock]').forEach(el => el.addEventListener('click', async event => {
