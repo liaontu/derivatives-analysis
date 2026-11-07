@@ -5,6 +5,7 @@ import { createReports } from './daily-reports.mjs';
 import { createSeriesReports } from './series-reports.mjs';
 import { createWarrantJournal } from './warrant-journal.mjs';
 import { createWarrantRelationship } from './warrant-relationship.mjs';
+import { createSignalBacktest } from './signal-backtest.mjs';
 import { createUSPages } from './us.mjs';
 import { loadWarrants } from './catalog.mjs';
 import { createWarrantBranches } from './branches.mjs';
@@ -22,6 +23,7 @@ const state = { page: 0, warrant: { active: true, minVolume: '', sort: 'volume' 
 const pages = {
   overview: ['市場總覽', '把行情、部位與交易熱度，放在同一個視野。'],
   'warrant-report': ['權證每日追蹤報告', '整合價量、分點持續買賣、發行條件與訊號後續觀察，逐日保存。'],
+  'warrant-signal-backtest': ['分點線索回測', '固定規則追蹤連續買超、疑似換倉與雙邊買超的後續現股及權證漲跌。'],
   'warrant-relationship': ['近月現股與權證關聯', '逐日比較現股、權證成交量、履約條件與分點交易線索，區分事實與可能策略。'],
   futures: ['期貨籌碼追蹤', '法人多空部位、大額交易人與期貨商成交熱度。'],
   options: ['選擇權籌碼追蹤', '從買賣權部位、履約價與 Put/Call 比，觀察市場結構。'],
@@ -67,6 +69,7 @@ const dailyReports = createReports({ load, table, tr, select, metric });
 const seriesReports = createSeriesReports({ load, table, tr, select, metric, empty });
 const warrantJournal = createWarrantJournal({ load, table, tr, select, metric });
 const warrantRelationship = createWarrantRelationship({ load, table, tr, select, metric });
+const signalBacktest = createSignalBacktest({ load, table, tr, select, metric });
 
 async function load(name) {
   if (!cache.has(name)) cache.set(name, (async () => {
@@ -239,6 +242,7 @@ async function sources() {
 function bind(kind) {
   const rerender = () => render();
   if (kind === 'warrant-report') { warrantJournal.bind(rerender); return; }
+  if (kind === 'warrant-signal-backtest') { signalBacktest.bind(rerender); return; }
   if (kind === 'warrant-relationship') { warrantRelationship.bind(rerender); return; }
   if (['warrant-volume-report','position-report'].includes(kind)) { dailyReports.bind(kind,rerender); return; }
   if (kind === 'series-report') { seriesReports.bind(rerender); return; }
@@ -307,7 +311,7 @@ async function render() {
       try { const response = await fetch('automation/derivatives/taiwan-calendar.json', {cache:'no-cache'}); if (!response.ok) throw Error('CALENDAR_UNAVAILABLE'); setTradingCalendar(await response.json()); }
       catch { setTradingCalendar(null); }
     }
-    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'stock-options', 'warrant-report', 'warrant-relationship', 'warrant-volume-report', 'position-report', 'series-report', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
+    const scope = route.startsWith('us-') ? manifest.sources.filter(s => s.region === 'US') : ['futures', 'options', 'stock-options', 'warrant-report', 'warrant-relationship', 'warrant-signal-backtest', 'warrant-volume-report', 'position-report', 'series-report', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? manifest.sources.filter(s => s.region !== 'US') : manifest.sources;
     const old = scope.filter(s => isStaleSource(s));
     const calendarUnknown = scope.some(s => s.region === 'TW' && s.date && taiwanTradingAge(s.date) === null);
     const calendarNotice = calendarUnknown ? '交易日曆未驗證或年份未涵蓋，無法判斷台灣資料新鮮度。' : manifest.calendarStatus?.status === 'retained' ? '交易日曆更新失敗，使用上次核實版本。' : '';
@@ -315,8 +319,8 @@ async function render() {
     $('#notice').classList.toggle('warning', !!(failed.length || old.length || calendarNotice));
     $('#notice').innerHTML = failed.length || old.length || calendarNotice ? `${calendarNotice}${failed.length ? `${failed.length} 個來源更新異常。` : ''}${old.length ? `${old.length} 個來源資料較舊（台灣資料超過 4 個交易日／美國日資料超過 4 個日曆天／週報超過 14 個日曆天）。` : ''} 已保留最近成功值。<a href="#sources">查看資料狀態</a>` : `官方資料已載入。日資料與 CFTC 週報依原始頻率呈現；各表分別標示資料日期。`;
     if (route === 'warrant-branches') { const check = await load('check-branches').catch(() => null); if (token !== generation) return; $('#notice').textContent = `${calendarNotice}富邦證券公開排行／嘉實資訊 · 非全部分點 · 最近檢查（台北）：${checkLabel(check)}`; $('#notice').classList.toggle('warning', !!calendarNotice); }
-    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'stock-options', 'warrant-report', 'warrant-relationship', 'warrant-volume-report', 'position-report', 'series-report', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
-    const html = route === 'warrant-relationship' ? await warrantRelationship.page() : route === 'warrant-report' ? await warrantJournal.page() : route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : ['warrant-volume-report','position-report'].includes(route) ? await dailyReports.page(route) : route === 'series-report' ? await seriesReports.page() : route === 'stock-options' ? await stockOptions.page() : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'stock-options', 'warrant-report', 'warrant-relationship', 'warrant-signal-backtest', 'warrant-volume-report', 'position-report', 'series-report', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
+    const html = route === 'warrant-signal-backtest' ? await signalBacktest.page() : route === 'warrant-relationship' ? await warrantRelationship.page() : route === 'warrant-report' ? await warrantJournal.page() : route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : ['warrant-volume-report','position-report'].includes(route) ? await dailyReports.page(route) : route === 'series-report' ? await seriesReports.page() : route === 'stock-options' ? await stockOptions.page() : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
     if (token !== generation) return;
     $('#content').innerHTML = html;
     bind(route);

@@ -90,7 +90,7 @@ export function createWarrantJournal({load,table,tr,select,metric}) {
       <div class="metrics">${metric('可比較權證',fmt(s.eligible),`${fmt(s.total)} 檔中的 ${rate(s.eligible,s.total)}`)}${metric('放量權證',fmt(s.volumeHits),'分母為有五日基準的可比較權證')}${metric('同日分點涵蓋',fmt(s.branchCovered),`${s.branchRequested} 檔追蹤清單；占名錄 ${rate(s.branchCovered,s.total)}`)}${metric('持續／反轉紀錄',fmt(s.branchSignals),'每筆為一檔權證與一個分點')}</div>
       <p>觀察訊號：${Object.entries(s.signals).map(([k,v])=>esc(signalLabels[k])+' '+fmt(v)+' 檔').join(' · ')||'本期沒有符合門檻的項目'}。不同訊號可能出現在同一檔權證，不可直接相加。</p>
       <p class="note">分點總清單 ${s.branchUniverse} 檔，本報告僅納入個股權證 ${s.branchRequested} 檔；ETF／指數權證另在原始分點頁查詢。同條件配對 ${fmt(report.spreadCoverage.paired)} 檔，可計算 Z ${fmt(report.spreadCoverage.zReady)} 檔；其餘無法判定 Z 異常。</p>
-      <p><a href="#warrant-volume-report?date=${esc(day)}">完整量價日報與近月歷史 →</a> · <a href="#warrant-branches">原始分點排行 →</a> · <a href="data/derivatives/${prefix}revisions/${esc(day)}-${esc(report.revision)}.json" download>下載本版 JSON</a></p></section>
+      <p><a href="#warrant-volume-report?date=${esc(day)}">完整量價日報與近月歷史 →</a> · <a href="#warrant-branches">原始分點排行 →</a> · <a href="#warrant-signal-backtest">分點線索回測 →</a> · <a href="data/derivatives/${prefix}revisions/${esc(day)}-${esc(report.revision)}.json" download>下載本版 JSON</a></p></section>
       <section class="panel"><h2>標的權證放量熱度</h2><p>至少 10 檔可比較權證的標的，按放量占比列前 10 名；同時呈現分母，認購、認售分開。</p>
       ${table(['標的','放量／可比較','放量比例','認購放量／可比','認售放量／可比'],ranked.map(r=>tr([`<button class="text-link" data-journal-stock="${esc(r.code)}">${esc(r.code)} ${esc(r.name)}</button>`,`${r.call+r.put}／${r.eligible}`,rate(r.call+r.put,r.eligible),`${r.call}／${r.callBase}`,`${r.put}／${r.putBase}`])))}</section>
       ${shortlist(report)}${branches(report)}
