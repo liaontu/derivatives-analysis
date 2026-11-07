@@ -26,6 +26,7 @@ HINTS = {'call-up': '上漲日認購連續買超', 'call-down': '下跌日認購
          'put-down': '下跌日認售連續買超', 'put-up': '上漲日認售連續買超',
          'roll': '近到期賣超與長天期買超並存', 'both': '同分點認購、認售同日買超'}
 RULES = {'version': VERSION, 'branchStreak': 3, 'rollSellDays': 30, 'rollBuyDays': 60,
+         'issuerPolicy': 'exclude-issuer-head-office-v1',
          'minCorrelationPairs': 10, 'topWarrants': 5, 'branchLeadersPerSide': 3,
          'basis': '分點是交易通路，非單一大戶；成交量不是主動買進量；歷史重建不是當時可得訊號。',
          'issuerBasis': '發行商由權證名稱判定；發行商總公司分點依名稱比對推定為造市與避險部位（未取得造市專戶身分），不列入策略線索；其淨賣超反號只是有排行權證的市場淨買進粗估，不是全市場淨額；同券商其他分點另標示。'}
@@ -148,6 +149,7 @@ def summarize(day, rows, previous, previous_spot, payloads, calendar):
     spot = next(iter(spots)) if len(spots)==1 else None
     old = {identity(r):r for r in previous}
     record = {'date':day,'spot':spot,'spotPct':price_change(spot,previous_spot),
+              'signalRules': {k:RULES[k] for k in ('version','branchStreak','rollSellDays','rollBuyDays','issuerPolicy')},
               'spotStatus':'同日標的價一致' if len(spots)==1 else '標的價缺漏或來源不一致',
               'previousDate':sessions(day,1,calendar)[0], 'count':len(rows), 'active':0,
               'branchWarrants':0,'branchRows':0, 'branchVolume':0,'branchIssues':0, 'sides':{}}

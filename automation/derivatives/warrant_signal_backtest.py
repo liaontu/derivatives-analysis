@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from statistics import mean, median
 import argparse
+import hashlib
 import json
 
 try:
@@ -19,12 +20,15 @@ except ImportError:
     from warrant_focus import numeric
     from trading_calendar import load_calendar, CalendarUnavailable
 
-VERSION = 'branch-event-study-v1'
+VERSION = 'branch-event-study-v2'
 RULES = {'version': VERSION, 'minNetLots': 100, 'horizons': [1, 3, 5, 10], 'cooldownSessions': 11,
          'minimumSamples': 30, 'minimumDates': 10, 'minimumCoverage': .7,
          'baseline': '訊號後首個交易日收盤；觀察其後第1、3、5、10個交易日，不順延缺價。',
          'sampling': '同來源模式、同標的、同類權別訊號，首筆後11個交易日不重複納入；同日取較小腿淨張數最大者，再依代碼排序。'}
-SIGNAL_RULES = {'version':'warrant-relationship-v1','branchStreak':3,'rollSellDays':30,'rollBuyDays':60}
+SIGNAL_RULES = {'version':'warrant-relationship-v2','branchStreak':3,'rollSellDays':30,'rollBuyDays':60,
+                'issuerPolicy':'exclude-issuer-head-office-v1'}
+LEGACY_VERSION = 'branch-event-study-v1'
+LEGACY_SIGNAL_RULES = {'version':'warrant-relationship-v1','branchStreak':3,'rollSellDays':30,'rollBuyDays':60}
 GROUPS = {'call-up': '上漲日認購連買', 'call-down': '下跌日認購連買',
           'put-up': '上漲日認售連買', 'put-down': '下跌日認售連買',
           'roll-C': '認購疑似換倉', 'roll-P': '認售疑似換倉', 'both': '認購＋認售雙邊買超'}
@@ -36,6 +40,67 @@ TAIPEI = timezone(timedelta(hours=8))
 
 def optional(path, default):
     return read(path) if path.exists() else default
+
+
+def prepare_version(folder, now, as_of):
+    """Only the reviewed v1 -> v2 migration is allowed; freeze all old evidence first."""
+    versions = optional(folder/'versions.json', {'active': VERSION, 'archived': []})
+    # Recover the version selector if a prior run stopped after saving its cohort.
+    for manifest in sorted((folder/'versions').glob('*/manifest.json')):
+        entry = read(manifest)
+        if not any(v['version'] == entry['version'] for v in versions['archived']):
+            versions['archived'].append(entry)
+    cohort = optional(folder/'cohort.json', None)
+    prices = optional(folder/'prices.json', {'spots': {}, 'warrants': {}, 'revisions': []})
+    if cohort and cohort['rules'].get('version') == LEGACY_VERSION:
+        if cohort['rules'] != {**RULES, 'version': LEGACY_VERSION} or cohort.get('signalRules') != LEGACY_SIGNAL_RULES:
+            raise ValueError('舊版規則與核准的遷移內容不符，保留原研究')
+        archive = folder/'versions'/LEGACY_VERSION
+        hashes = {}
+        for name in ('cohort.json', 'prices.json', 'outcomes.json'):
+            origin, target = folder/name, archive/name
+            if not origin.exists():
+                raise ValueError('舊版研究缺少必要紀錄，停止遷移：'+name)
+            raw = origin.read_bytes()
+            if target.exists() and target.read_bytes() != raw:
+                # Failed retries may change only the flat result's status/error notice.
+                # Such a notice is not new evidence and never replaces the frozen file.
+                same_result = name == 'outcomes.json' and {
+                    k:v for k,v in read(target).items() if k not in ('status','error')
+                } == {k:v for k,v in read(origin).items() if k not in ('status','error')}
+                if not same_result:
+                    raise ValueError('封存已存在且內容不同，拒絕覆寫：'+name)
+            hashes[name] = hashlib.sha256(target.read_bytes() if target.exists() else raw).hexdigest()
+        # Validate every file before writing any archive bytes.
+        for name in hashes:
+            target = archive/name
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((folder/name).read_bytes())
+        metadata = optional(archive/'manifest.json', None)
+        if metadata and metadata.get('sha256') != hashes:
+            raise ValueError('封存校驗碼不一致，停止遷移')
+        if metadata is None:
+            old_result = read(folder/'outcomes.json')
+            metadata = {'version': LEGACY_VERSION, 'sourceVersion': LEGACY_SIGNAL_RULES['version'],
+                        'archivedAt': now, 'asOf': old_result.get('asOf'), 'events': len(cohort['items']),
+                        'activatedAt': cohort['activatedAt'], 'activationAsOf': cohort['activationAsOf'],
+                        'path': 'versions/'+LEGACY_VERSION, 'sha256': hashes,
+                        'reason': '新版排除發行商總公司分點；舊訊號、價格與結果保持封存，不併入新版統計。'}
+            save(archive/'manifest.json', metadata)
+        if not any(v['version'] == LEGACY_VERSION for v in versions['archived']):
+            versions['archived'].append(metadata)
+        # Prices are independent dated observations, not samples or performance.
+        # Reuse them by their existing identity keys; new signal evidence is captured afresh.
+        cohort = {'rules': RULES, 'signalRules': SIGNAL_RULES, 'activatedAt': now, 'activationAsOf': as_of,
+                  'seedPriceVersion': LEGACY_VERSION, 'items': []}
+    elif cohort:
+        if cohort['rules'] != RULES or cohort.get('signalRules') != SIGNAL_RULES:
+            raise ValueError('研究或來源規則已變更；應建立新版本，不能覆寫既有樣本')
+    else:
+        cohort = {'rules': RULES, 'signalRules': SIGNAL_RULES, 'activatedAt': now, 'activationAsOf': as_of, 'items': []}
+    versions['active'] = VERSION
+    return cohort, prices, versions
 
 
 def plan(day, calendar):
@@ -302,17 +367,18 @@ def update(output, now=None, history_cache=None, terms_cache=None):
     as_of = index['end']; calendar = load_calendar(output)
     if any(index.get('rules',{}).get(k) != v for k,v in SIGNAL_RULES.items()):
         raise ValueError('來源線索規則已改變；需建立新的研究版本')
-    cohort = optional(folder/'cohort.json', {'rules':RULES, 'activatedAt':now, 'activationAsOf':as_of, 'items':[]})
-    if cohort['rules'] != RULES:
-        raise ValueError('研究規則已變更；應建立新版本，不能覆寫既有樣本')
-    if cohort.get('signalRules',SIGNAL_RULES) != SIGNAL_RULES:
-        raise ValueError('既有來源線索規則不同')
-    cohort['signalRules'] = SIGNAL_RULES
+    cohort, ledger, versions = prepare_version(folder, now, as_of)
     events = {e['id']:e for e in cohort['items']}
     observed, covered, candidates, stock_days = {}, set(), [], {}
+    source_coverage = {'eligibleRecords': 0, 'excludedRecords': 0, 'excludedHints': 0}
     for path in sorted((output/'warrant-relationship/stocks').glob('*.json')):
         stock = read(path); stock_days[stock['code']] = stock['days']
         for row in stock['days']:
+            if row.get('signalRules') != SIGNAL_RULES:
+                source_coverage['excludedRecords'] += 1
+                source_coverage['excludedHints'] += len(row['hints'])
+                continue
+            source_coverage['eligibleRecords'] += 1
             day = row['date']; covered.add((stock['code'],day))
             for hint in row['hints']:
                 key = event_key(day,stock['code'],hint); observed[key] = digest(hint)
@@ -348,7 +414,6 @@ def update(output, now=None, history_cache=None, terms_cache=None):
         event = capture_event(day,stock,hint,quotes,payloads,now,cohort,calendar,sources.get(day,{}))
         events[event['id']] = event
     cohort['items'] = sorted(events.values(),key=lambda e:(e['signalDate'],e['id']))
-    ledger = optional(folder/'prices.json',{'spots':{},'warrants':{},'revisions':[]})
     # Keep source dates/URLs after the near-month report and display histories roll away.
     ledger.setdefault('sources',{}).update({d:sources[d] for d in days if d<=as_of and d in sources})
     update_prices(cohort['items'],histories,quotes,ledger,as_of,calendar)
@@ -361,10 +426,13 @@ def update(output, now=None, history_cache=None, terms_cache=None):
         out['evidenceState'] = ('same' if observed[event['id']]==event['hintHash'] else 'changed') if event['id'] in observed else (
             'no-longer-observed' if (event['underlying'],event['signalDate']) in covered else 'outside-window')
         outcomes.append(out)
-    data = {'schemaVersion':1,'status':'ok','asOf':as_of,'activatedAt':cohort['activatedAt'],
+    data = {'schemaVersion':2,'status':'ok','asOf':as_of,'activatedAt':cohort['activatedAt'],
             'activationAsOf':cohort['activationAsOf'],'rules':RULES,'signalRules':SIGNAL_RULES,'groups':GROUPS,'modes':MODES,
+            'sourceCoverage':source_coverage,
             'summary':aggregate(outcomes,as_of),'items':outcomes,'priceRevisionCount':len(ledger['revisions']),
             'limits':['分點排行有限，分點不是單一客戶；沒有全市場或個人完整持倉。',
+                      '本版排除依權證與分點名稱判定的發行商總公司；這是疑似造市通路判定，不是已確認帳戶身分。同券商其他分點仍保留標示。',
+                      '只納入逐個股、逐日明確標記相同來源規則的線索，未標記或其他版本不混入。舊版結果完整封存，現有日期價格可依同一身分沿用。',
                       '連續買超：同分點同權證至少3個交易日淨買超入榜，缺日或未入榜即中斷；現股無漲跌或缺價日不分類。',
                       '疑似換倉：同分點、同標的、同權別，剩30日內權證賣超與剩60日以上權證買超並存；各取淨張數最大一檔。',
                       '雙邊買超：同分點、同標的、同日認購與認售各取買超淨張數最大一檔；不要求相同履約價或到期日。',
@@ -378,6 +446,7 @@ def update(output, now=None, history_cache=None, terms_cache=None):
                       '同股同類訊號去除11交易日內重疊後，跨股仍受共同市場影響，並非完全獨立樣本。',
                       '每組至少30筆完整代表樣本、10個訊號日期、成熟樣本完整率70%才標示可供後續驗證，仍不表示交易策略有效。']}
     save(folder/'cohort.json',cohort); save(folder/'prices.json',ledger); save(folder/'outcomes.json',data)
+    save(folder/'versions.json',versions)
     return data
 
 

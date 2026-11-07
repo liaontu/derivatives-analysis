@@ -43,8 +43,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 9793,
-      "sha256": "558fd68322e790c12ae93b759145487ac553e9b53d7afad90826a39a44d0e5ea"
+      "bytes": 10365,
+      "sha256": "7f6e45dd975c6f3f5ec9d827a1ad20de92d2af3f1ab7c29c4efab6b7301b9163"
     },
     {
       "path": "assets/app.mjs",
@@ -113,8 +113,8 @@
     },
     {
       "path": "assets/signal-backtest.mjs",
-      "bytes": 14661,
-      "sha256": "79b3248e271e02fb7943d557cdc6f8c57822c2fd1463a1e79d7d2035dfa53437"
+      "bytes": 16125,
+      "sha256": "5be610a93fc07ed1d2d87b646ffedc4f1bd5734a7af3730a351002c3ce3f548c"
     },
     {
       "path": "assets/spreads.mjs",
@@ -123,8 +123,8 @@
     },
     {
       "path": "assets/stock-options.mjs",
-      "bytes": 9044,
-      "sha256": "6e12cd4a111ab00dad976f300ef40fba96712ec1976c3f3a94ef997dffb592d0"
+      "bytes": 9092,
+      "sha256": "b65b66f20285df61959431d01eec6ea5c64512d7bd964f4b94a51ebb8093cd6d"
     },
     {
       "path": "assets/styles.css",
@@ -223,8 +223,8 @@
     },
     {
       "path": "automation/derivatives/stock_options.py",
-      "bytes": 6201,
-      "sha256": "9a3713c7b0a8c066a8447261a0d55cf24a10d3773bd8f51c4aa1cf6ae5a6cf92"
+      "bytes": 9028,
+      "sha256": "9c5e3d0d08a31e7bcd76e987bfad0f88985a302b17e44d3eebe1bb4566467b41"
     },
     {
       "path": "automation/derivatives/taiwan-calendar.json",
@@ -288,8 +288,8 @@
     },
     {
       "path": "automation/derivatives/warrant_relationship.py",
-      "bytes": 23313,
-      "sha256": "9d5584efeeaf28c6f0378fc2e3b0bd0c081b072b531476c3563fd0143993029c"
+      "bytes": 23494,
+      "sha256": "415289d8133c2253560f12aadc7346a30a6f68e08d53adc9247ddddad9a6f5f3"
     },
     {
       "path": "automation/derivatives/warrant_series_reports.py",
@@ -298,8 +298,8 @@
     },
     {
       "path": "automation/derivatives/warrant_signal_backtest.py",
-      "bytes": 25478,
-      "sha256": "5874be35170d72fa0337d2ead9c873cab237f30f08006dd3a6c923cadb39eb33"
+      "bytes": 30178,
+      "sha256": "104974ced479ab2e68eadd3ae58eaf48a4e540778ddd679e61a60e267dd0a1ec"
     },
     {
       "path": "automation/derivatives/warrant_spreads.py",

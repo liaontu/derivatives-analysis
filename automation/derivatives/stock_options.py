@@ -1,21 +1,27 @@
 """Build same-session Taiwan standard single-stock call/put observations."""
 from datetime import date
 import argparse
+import csv
 import hashlib
+import io
 import json
 import math
 from pathlib import Path
 import re
 
 if __package__:
-    from .collect import fetch, number
+    from .collect import fetch, number, request_bytes
     from .publication import save_text
 else:
-    from collect import fetch, number
+    from collect import fetch, number, request_bytes
     from publication import save_text
 
 
 LIST_URL = 'https://openapi.taifex.com.tw/v1/SSOLists'
+LIST_CSV = 'https://www.taifex.com.tw/data_gov/taifex_open_data.asp?data_name=SSOLists'
+ROSTER_ALIASES = {'股票選擇權商品契約代碼': 'Contract', '標的證券': 'UnderlyingStock',
+                  '證券代號': 'StockCode', '標的證券簡稱': 'StockName', '標的證券種類': 'Type'}
+ROSTER_TYPES = {'上市普通股標的證券', '上櫃普通股標的證券', '上市ETF標的證券', '上櫃ETF標的證券'}
 INDEX = 'stock-option-watch'
 TWSE_DAILY = 'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALLBUT0999&response=json&date='
 
@@ -29,8 +35,23 @@ def read(path):
 
 
 def stock_contracts(raw):
+    if not isinstance(raw, list) or not raw:
+        raise ValueError('股票選擇權名單必須是非空表格')
     contracts = {}
-    for row in raw:
+    for original in raw:
+        if not isinstance(original, dict):
+            raise ValueError('股票選擇權名單資料列格式不符')
+        row = {}
+        for key, value in original.items():
+            key = ROSTER_ALIASES.get(str(key).strip().lstrip('\ufeff'), str(key).strip().lstrip('\ufeff'))
+            value = str(value).strip() if value is not None else ''
+            if key in row and row[key] != value:
+                raise ValueError('股票選擇權名單中英文欄位內容衝突')
+            row[key] = value
+        if not {'Type', 'Contract', 'StockCode', 'StockName'} <= set(row):
+            raise ValueError('股票選擇權名單欄位未識別：' + ', '.join(sorted(row)))
+        if row['Type'] not in ROSTER_TYPES:
+            raise ValueError('股票選擇權標的類別未識別：' + row['Type'])
         if row['Type'] not in ('上市普通股標的證券', '上櫃普通股標的證券'):
             continue
         symbol, code = row['Contract'], row['StockCode']
@@ -42,6 +63,32 @@ def stock_contracts(raw):
     if not contracts:
         raise ValueError('Empty stock option list')
     return contracts
+
+
+def decode_roster(raw):
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        text = raw.decode('cp950')
+    if text.lstrip().startswith(('[', '{')):
+        return json.loads(text), 'JSON'
+    return list(csv.DictReader(io.StringIO(text, newline=None))), 'CSV'
+
+
+def fetch_contracts():
+    """Recognize both official schemas, with a validated free official CSV fallback."""
+    failures = []
+    for url in (LIST_URL, LIST_CSV):
+        try:
+            raw = request_bytes(url)
+            rows, format_name = decode_roster(raw)
+            contracts = stock_contracts(rows)
+            return contracts, {'url': url, 'format': format_name, 'sha256': hashlib.sha256(raw).hexdigest(),
+                               'rows': len(rows), 'stockContracts': len(contracts),
+                               'fields': sorted(rows[0]), 'fallback': url != LIST_URL}
+        except Exception as exc:
+            failures.append(type(exc).__name__ + ': ' + str(exc)[:180])
+    raise ValueError('兩個官方名單來源均未通過核對；' + '；'.join(failures))
 
 
 def positive(v):
@@ -122,17 +169,20 @@ def build(output, options, contracts, stock_quotes=None):
             'spotUrl': TWSE_DAILY + day.replace('-', ''), 'stocks': stocks}
 
 
-def publish(output, options, contracts):
+def publish(output, options, contracts, roster=None):
     day = date.fromisoformat(options['date']).isoformat()
     stock_quotes = stock_market_quotes(fetch(TWSE_DAILY + day.replace('-', '')), day,
                                        {code for code, _ in contracts.values()})
     snapshot = build(output, options, contracts, stock_quotes)
+    if roster is not None:
+        snapshot['roster'] = roster
     day = snapshot['date']
     save_text(output / INDEX / (day + '.json'), serialize(snapshot))
     path = output / (INDEX + '.json')
     previous = read(path) if path.exists() else {}
     dates = sorted(set(previous.get('dates', [])) | {day})[-60:]
-    save_text(path, serialize({'dates': dates, 'latest': dates[-1], 'status': 'ok', 'rosterUrl': LIST_URL}))
+    save_text(path, serialize({'dates': dates, 'latest': dates[-1], 'status': 'ok',
+                              'rosterUrl': roster['url'] if roster else LIST_URL, 'roster': roster}))
 
 
 def main():
@@ -140,12 +190,15 @@ def main():
     parser.add_argument('--data', type=Path, default=Path('data/derivatives'))
     args = parser.parse_args()
     try:
-        contracts = stock_contracts(fetch(LIST_URL))
-        publish(args.data, read(args.data / 'options.json'), contracts)
-    except Exception:
+        contracts, roster = fetch_contracts()
+        options = read(args.data / 'options.json')
+        publish(args.data, options, contracts, roster)
+        print(serialize({'date': options['date'], 'status': 'ok', 'roster': roster}))
+    except Exception as exc:
         path = args.data / (INDEX + '.json')
         previous = read(path) if path.exists() else {'dates': [], 'latest': None, 'rosterUrl': LIST_URL}
         previous['status'] = 'retained'
+        previous['error'] = str(exc)[:400]
         save_text(path, serialize(previous))
         raise
 

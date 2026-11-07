@@ -79,7 +79,7 @@ export function createStockOptions({load, table, tr, select, metric}) {
       ${table(['到期別／履約價','買權收盤／變動','賣權收盤／變動','成交量 C／P（口）','收盤價差（元／股）','價差變動','賣合成報價差','買合成報價差'],choices.map(rowHtml))}
       </section>${calc}<section class="panel source-list"><h2>資料範圍與結算</h2><p>只查期交所名單的台灣普通股標準契約、一般時段。上市現股優先取證交所同日收盤與最後揭示買賣價。缺少現股報表列時只查同日標的收盤歷史。缺價留白，結算價不代替成交價。歷史日期依目前可核對的標的清單整理。</p>
       <p>股票選擇權為歐式現金結算，到期採現股最後 60 分鐘均價。盤末報價時間可能不同，缺少同步三邊報價、可成交數量、可借券數與結算均價避險成本，成本情境僅供盤後研究。</p>
-      <p><a href="https://openapi.taifex.com.tw/v1/SSOLists">期交所標的清單</a> · <a href="https://openapi.taifex.com.tw/v1/DailyMarketReportOpt">選擇權行情</a> · <a href="${esc(now.spotUrl)}">證交所同日行情</a> · <a href="https://www.taifex.com.tw/cht/2/sSO">交易及結算規格</a> · <a href="data/derivatives/stock-option-watch/${esc(day)}.json">本日觀察資料</a></p></section>`;
+      <p><a href="${esc(now.roster?.url || index.rosterUrl || 'https://openapi.taifex.com.tw/v1/SSOLists')}">期交所標的清單</a> · <a href="https://openapi.taifex.com.tw/v1/DailyMarketReportOpt">選擇權行情</a> · <a href="${esc(now.spotUrl)}">證交所同日行情</a> · <a href="https://www.taifex.com.tw/cht/2/sSO">交易及結算規格</a> · <a href="data/derivatives/stock-option-watch/${esc(day)}.json">本日觀察資料</a></p></section>`;
   }
   function bind(rerender) {
     for (const [id, key] of [['so-day','day'],['so-symbol','symbol'],['so-all','all'],['so-series','selected']]) {
