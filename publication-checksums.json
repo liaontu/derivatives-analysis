@@ -103,8 +103,8 @@
     },
     {
       "path": "assets/series-reports.mjs",
-      "bytes": 15558,
-      "sha256": "2d0ab70b7372c3d4666903580a82844af558d11f0fca8239df3a7301cf75d637"
+      "bytes": 17128,
+      "sha256": "c88b33568cef9c9546bc2b9fe1b1d8819d07d8734623f94e8ba75515795cf1d3"
     },
     {
       "path": "assets/spreads.mjs",
@@ -278,8 +278,8 @@
     },
     {
       "path": "automation/derivatives/warrant_series_reports.py",
-      "bytes": 35734,
-      "sha256": "8dfcbdbd9614bc6e432ec8f938fc272bdf0975410288a419781cad2cdd570960"
+      "bytes": 42503,
+      "sha256": "aaf78e63cdcf79fc0325d4011b54154232010225b50c3c90f9670e09fad9e97a"
     },
     {
       "path": "automation/derivatives/warrant_spreads.py",

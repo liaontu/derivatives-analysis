@@ -29,6 +29,10 @@ RULES = {'version': 'warrant-series-v1', 'liquidShare': 0.8, 'liquidMinDays': 3,
          # top-10 volume share (%), and the period-on-period change that counts as clear (%).
          'readings': {'move': {'weekly': [1, 3, 7], 'monthly': [2, 5, 10]}, 'corr': [0.5, 0.8], 'consistent': [70, 90],
                       'liquidShare': [15, 30], 'concentration': [30, 50], 'change': 20},
+         # Stocks worth a closer look: first the eligibility floor (volume rank, a base day before the period,
+         # enough liquid warrants and, monthly, enough slopes), then the top N per anomaly reason.
+         'watch': {'volumeRank': 100, 'minLiquid': 10, 'minSideLiquid': 3, 'minSlopes': 10, 'perReason': 10,
+                   'slopeDeviation': 1.0, 'changePct': 20},
          'basis': '權證與標的只比較同一批已收錄資料日；無成交日收盤價維持缺值，不補零',
          'description': '固定規則的描述統計與固定門檻的判讀；不是策略績效、不預測、不構成買賣建議'}
 LIMITATIONS = [
@@ -245,8 +249,69 @@ def build_report(output, kind, start, end):
     top = [dict(w, underlying=u['code'], underlyingName=u['name']) for u in underlyings for w in u.get('topWarrants', [])]
     report['topWarrants'] = sorted(top, key=lambda w: (-w['volume'], w['code']))[:RULES['topWarrants'] * 2]
     report['observations'] = observations(report)
+    report['watch'] = watch_list(report)
     report['readings'] = readings(report)
     return report
+
+
+def watch_list(report):
+    """Stocks worth a closer look this period: eligible by sample size, then ranked by how unusual their numbers are."""
+    m, kind, t = report['market'], report['kind'], RULES['watch']
+    clear_move = RULES['readings']['move'][kind][1]
+    excluded, eligible = Counter(), []
+    for rank, u in enumerate(report['underlyings'], 1):
+        if rank > t['volumeRank']:
+            excluded[f"成交量未進前 {t['volumeRank']} 名"] += 1
+        elif not u['baseBeforePeriod']:
+            excluded['期間前沒有基準日'] += 1
+        elif u['liquid'] < t['minLiquid']:
+            excluded[f"常交易不足 {t['minLiquid']} 檔"] += 1
+        elif kind == 'monthly' and u['call'].get('slopes', 0) < t['minSlopes']:
+            excluded[f"有斜率的認購不足 {t['minSlopes']} 檔"] += 1
+        else:
+            eligible.append(u)
+    reasons = defaultdict(list)
+
+    def pick(candidates, key, label):
+        for u in sorted(candidates, key=lambda u: (key(u), -u['volume'], u['code']))[:t['perReason']]:
+            reasons[u['code']].append(label(u))
+
+    def weakest_side(u):
+        sides = [(u[s]['consistentShare'], name) for s, name in (('call', '認購同向'), ('put', '認售反向'))
+                 if u[s]['liquid'] >= t['minSideLiquid'] and u[s]['consistentShare'] is not None]
+        return min(sides) if sides else None
+
+    pick([u for u in eligible if weakest_side(u) and weakest_side(u)[0] < RULES['readings']['consistent'][0]],
+         lambda u: weakest_side(u)[0],
+         lambda u: f"方向一致偏低：{weakest_side(u)[1]}只有 {weakest_side(u)[0]:.0f}%")
+    pick([u for u in eligible if numeric(u['underlyingReturnPct']) and abs(u['underlyingReturnPct']) >= clear_move],
+         lambda u: -abs(u['underlyingReturnPct']),
+         lambda u: f"標的{'明顯' if abs(u['underlyingReturnPct']) < RULES['readings']['move'][kind][2] else '大幅'}{'上漲' if u['underlyingReturnPct'] > 0 else '下跌'} {u['underlyingReturnPct']:+.2f}%")
+    market_slope = m['call'].get('medianSlope')
+    if kind == 'monthly' and numeric(market_slope):
+        pick([u for u in eligible if numeric(u['call'].get('medianSlope')) and abs(u['call']['medianSlope'] - market_slope) >= t['slopeDeviation']],
+             lambda u: -abs(u['call']['medianSlope'] - market_slope),
+             lambda u: f"認購斜率中位數 {u['call']['medianSlope']:.3f}，與市場中位數 {market_slope:.3f} 相差 {u['call']['medianSlope'] - market_slope:+.2f}")
+    previous = (report.get('previous') or {}).get('stocks') or {}
+
+    def change(u):
+        before = previous.get(u['code'], {}).get('liquid')
+        return (u['liquid'] / before - 1) * 100 if positive(before) else None
+
+    pick([u for u in eligible if change(u) is not None and abs(change(u)) >= t['changePct']],
+         lambda u: -abs(change(u)),
+         lambda u: f"常交易檔數 {previous[u['code']]['liquid']}→{u['liquid']}（{change(u):+.0f}%）")
+    by_code = {u['code']: u for u in eligible}
+    items = [{'code': code, 'name': by_code[code]['name'], 'market': by_code[code]['market'], 'volume': by_code[code]['volume'],
+              'underlyingReturnPct': by_code[code]['underlyingReturnPct'], 'liquid': by_code[code]['liquid'],
+              'call': {k: by_code[code]['call'].get(k) for k in ('medianReturnPct', 'consistentShare', 'medianSlope')},
+              'put': {k: by_code[code]['put'].get(k) for k in ('medianReturnPct', 'consistentShare', 'medianSlope')},
+              'reasons': texts} for code, texts in reasons.items()]
+    items.sort(key=lambda i: (-len(i['reasons']), -i['volume'], i['code']))
+    return {'eligible': len(eligible), 'excluded': dict(excluded), 'items': items,
+            'basis': f"合格條件：成交量前 {t['volumeRank']} 名、期間前有基準日、常交易至少 {t['minLiquid']} 檔"
+                     + (f"、有斜率的認購至少 {t['minSlopes']} 檔" if kind == 'monthly' else '')
+                     + f"；理由各取前 {t['perReason']} 名後合併，理由多者在前。名單只表示數字特別，不表示機會或風險。"}
 
 
 def previous_report(output, kind, start_key):
@@ -263,7 +328,10 @@ def previous_report(output, kind, start_key):
             'market': {k: m.get(k) for k in ('underlyings', 'warrants', 'traded', 'liquid', 'volume')},
             'call': {k: m.get('call', {}).get(k) for k in ('medianReturnPct', 'medianSlope', 'consistentShare')},
             'put': {k: m.get('put', {}).get(k) for k in ('medianReturnPct', 'medianSlope', 'consistentShare')},
-            'underlyingReturn': m.get('underlyingReturn')}
+            'underlyingReturn': m.get('underlyingReturn'),
+            # Liquid counts of the stocks that were eligible last period, for the activity-change reason.
+            'stocks': {u['code']: {'liquid': u['liquid'], 'volume': u['volume']} for u in saved.get('underlyings', [])
+                       if u.get('liquid', 0) >= RULES['watch']['minLiquid']}}
 
 
 def fmt_pct(value):
@@ -362,12 +430,31 @@ def readings(report):
         if pu is not None and ur['medianPct'] is not None:
             changes.append(f"標的報酬中位數 {pu:+.2f}%→{ur['medianPct']:+.2f}%")
         out.append('與上一期比較：' + '，'.join(changes) + '。兩期的權證組成與期間長度不同，差異不代表趨勢。')
+    watch = report.get('watch')
+    if watch:
+        out.append(f"值得細看的標的：{watch['eligible']} 個標的樣本足夠，其中 {len(watch['items'])} 個因數字特別進入名單（理由見名單）；" + ('沒有標的觸發任何理由，本期沒有特別需要細看的個股。' if not watch['items'] else '名單只表示數字特別，不表示機會或風險。'))
     out.append('判讀依固定門檻自動產生，只說明數字的含義與相對大小；不是預測、不評價策略，也不構成買賣建議。')
     return out
 
 
 def num(value, digits=2):
     return '—' if not numeric(value) else f'{value:,.{digits}f}'
+
+
+def watch_html(report, esc):
+    watch = report.get('watch')
+    if not watch:
+        return ''
+    monthly = report['kind'] == 'monthly'
+    excluded = '；'.join(f'{esc(k)} {v:,}' for k, v in watch['excluded'].items())
+    rows = ''.join('<tr>' + ''.join(f'<td>{c}</td>' for c in [
+        f"{esc(i['code'])} {esc(i['name'])}", '<span style="white-space:normal;display:inline-block;min-width:260px;max-width:520px">' + '；'.join(esc(r) for r in i['reasons']) + '</span>',
+        esc(i['market'] or '—'), num(i['underlyingReturnPct']), f"{i['liquid']}", f"{i['volume']:,}",
+        f"{num(i['call']['medianReturnPct'])}／{num(i['call']['consistentShare'], 0)}%", f"{num(i['put']['medianReturnPct'])}／{num(i['put']['consistentShare'], 0)}%"]
+        + ([num(i['call']['medianSlope'], 3)] if monthly else [])) + '</tr>' for i in watch['items'])
+    head = ['標的', '理由', '市場', '標的報酬%', '常交易', '成交量（張）', '認購中位報酬％／同向', '認售中位報酬％／反向'] + (['認購斜率'] if monthly else [])
+    return (f"<section><h2>本期值得細看的標的</h2><p>{esc(watch['basis'])}</p><p>樣本足夠的標的 {watch['eligible']:,} 個；未列入：{excluded or '無'}。</p>"
+            f"<div class=\"scroll\"><table><thead><tr>{''.join('<th>' + esc(h) + '</th>' for h in head)}</tr></thead><tbody>{rows or '<tr><td colspan=' + chr(34) + str(len(head)) + chr(34) + '>本期沒有標的觸發任何理由。</td></tr>'}</tbody></table></div></section>")
 
 
 def report_html(report):
@@ -410,6 +497,7 @@ def report_html(report):
 <main><p class="eyebrow">衍生視界 · 權證與標的收盤序列</p><h1>權證時間序列{esc(kind_name)}</h1><p class="meta">期間 {esc(report['period']['start'])} 至 {esc(report['period']['end'])} · 版本 {esc(report['id'])} · 資料至 {esc(m['dataDays'][-1] if m['dataDays'] else '尚無資料')}</p>
 <section><h2>本期觀察</h2><ul>{''.join('<li>' + esc(t) + '</li>' for t in report['observations'])}</ul></section>
 <section><h2>本期判讀</h2><p>依固定門檻自動產生：說明每個數字的含義與相對大小，不是預測或建議。門檻見「方法與限制」。</p><ul>{''.join('<li>' + esc(t) + '</li>' for t in report.get('readings', []))}</ul></section>
+{watch_html(report, esc)}
 <section><h2>資料日與市場</h2><div class="scroll"><table><tr><th>資料日</th><th>有成交權證</th><th>成交量（張）</th></tr>{day_rows}</table></div><h3>依市場</h3><div class="scroll"><table><tr><th>市場</th><th>標的</th><th>曾掛牌</th><th>曾成交</th><th>常交易</th><th>成交量（張）</th></tr>{market_rows}</table></div></section>
 <section><h2>標的比較（成交量前 {RULES['topUnderlyings']} 名）</h2><p>標的報酬以期間最後收盤對基準日收盤；基準日為期間前最後一個資料日，標示「期間內」表示歷史不足而改用期間內第一個資料日。權證期間報酬只用有成交的日子；中位數只含常交易權證。完整 {len(report['underlyings'])} 個標的見 JSON。</p><div class="scroll"><table><thead><tr>{''.join('<th>' + esc(h) + '</th>' for h in head)}</tr></thead><tbody>{rows or '<tr><td colspan="12">期間內沒有標的資料。</td></tr>'}</tbody></table></div></section>
 <section><h2>成交量最大的常交易權證</h2><div class="scroll"><table><tr><th>權證</th><th>標的</th><th>權別</th><th>履約價</th><th>到期日</th><th>成交日／掛牌日</th><th>成交量（張）</th><th>期間報酬%</th>{'<th>斜率</th><th>相關</th><th>配對段數</th>' if monthly else ''}</tr>{top_rows}</table></div></section>
