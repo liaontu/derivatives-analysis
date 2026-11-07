@@ -25,8 +25,11 @@ RULES = {'version': VERSION, 'minNetLots': 100, 'horizons': [1, 3, 5, 10], 'cool
          'minimumSamples': 30, 'minimumDates': 10, 'minimumCoverage': .7,
          'baseline': '訊號後首個交易日收盤；觀察其後第1、3、5、10個交易日，不順延缺價。',
          'sampling': '同來源模式、同標的、同類權別訊號，首筆後11個交易日不重複納入；同日取較小腿淨張數最大者，再依代碼排序。'}
-SIGNAL_RULES = {'version':'warrant-relationship-v2','branchStreak':3,'rollSellDays':30,'rollBuyDays':60,
-                'issuerPolicy':'exclude-issuer-head-office-v1'}
+try:
+    from .warrant_signals import SIGNAL_RULES
+except ImportError:
+    from warrant_signals import SIGNAL_RULES
+
 LEGACY_VERSION = 'branch-event-study-v1'
 LEGACY_SIGNAL_RULES = {'version':'warrant-relationship-v1','branchStreak':3,'rollSellDays':30,'rollBuyDays':60}
 GROUPS = {'call-up': '上漲日認購連買', 'call-down': '下跌日認購連買',

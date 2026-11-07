@@ -31,42 +31,14 @@ RULES = {'version': VERSION, 'branchStreak': 3, 'rollSellDays': 30, 'rollBuyDays
          'basis': '分點是交易通路，非單一大戶；成交量不是主動買進量；歷史重建不是當時可得訊號。',
          'issuerBasis': '發行商由權證名稱判定；發行商總公司分點依名稱比對推定為造市與避險部位（未取得造市專戶身分），不列入策略線索；其淨賣超反號只是有排行權證的市場淨買進粗估，不是全市場淨額；同券商其他分點另標示。'}
 # Issuers as they appear inside warrant names (e.g. 台積電永豐64購16), and the broker each ranked branch belongs to.
-ISSUERS = ('元大', '凱基', '群益', '永豐', '統一', '國票', '台新', '富邦', '國泰', '中信', '兆豐', '元富', '康和')
-ISSUER_PATTERN = re.compile('(' + '|'.join(ISSUERS) + r')[0-9A-Z]{2}[購售牛熊][0-9]{2}$')
-BROKERS = {'元大': '元大', '元大證券': '元大', '凱基': '凱基', '凱基證券': '凱基', '群益金鼎': '群益', '群益': '群益',
-           '永豐金': '永豐', '永豐金證券': '永豐', '統一': '統一', '統一證券': '統一', '國票': '國票', '國票證券': '國票',
-           '台新': '台新', '台新證券': '台新', '富邦': '富邦', '富邦證券': '富邦', '國泰': '國泰', '國泰證券': '國泰',
-           '中國信託': '中信', '中信': '中信', '兆豐': '兆豐', '兆豐證券': '兆豐', '元富': '元富', '元富證券': '元富',
-           '康和': '康和', '康和證券': '康和'}
-RELATIONS = {'issuer': '發行商總公司（疑似造市）', 'sameBroker': '同券商分點', 'other': '其他分點', 'unknown': '發行商未判定'}
+try:
+    from .warrant_issuers import issuer_of, branch_relation, market_making, RELATIONS, POLICY, RULES_SHA256
+    from .warrant_signals import classify_hints, SIGNAL_RULES
+except ImportError:
+    from warrant_issuers import issuer_of, branch_relation, market_making, RELATIONS, POLICY, RULES_SHA256
+    from warrant_signals import classify_hints, SIGNAL_RULES
 
-
-def issuer_of(name):
-    """The issuer written into a warrant name, or None when the name does not follow the convention."""
-    match = ISSUER_PATTERN.search(name or '')
-    return match.group(1) if match else None
-
-
-def branch_relation(branch_name, issuer):
-    """issuer: the warrant issuer's own head-office branch (presumed market making by name matching); sameBroker: one of its retail branches."""
-    if not issuer:
-        return 'unknown'
-    parts = re.split(r'[-－]', branch_name or '')
-    broker = BROKERS.get(parts[0].strip())
-    if broker != issuer:
-        return 'other'
-    return 'issuer' if len(parts) == 1 else 'sameBroker'
-
-
-def market_making(branches):
-    """Per side, the issuers' head-office net flow among ranked warrants; its negative is a rough estimate of those warrants' market net buying, not a market-wide figure."""
-    out = {}
-    for cp in ('C', 'P'):
-        rows = [r for r in branches if r['cp'] == cp and r.get('relation') == 'issuer']
-        net = sum(r['net'] for r in rows)
-        out[cp] = {'rows': len(rows), 'warrants': len({r['code'] for r in rows}), 'issuerNet': net, 'marketNet': -net}
-    return out
-
+RULES.update(SIGNAL_RULES, issuerRulesSha256=RULES_SHA256)
 
 def optional(path, default):
     return read(path) if path.exists() else default
@@ -107,41 +79,6 @@ def pearson(pairs):
             'status': '同期描述性關聯，非因果或預測能力' if xx and yy else '序列沒有變動，無法計算'}
 
 
-def classify_hints(branches, spot_pct):
-    """Strategy clues from ranked branches; the issuers' own market-making branches never count as clues."""
-    hints, groups = [], defaultdict(list)
-    for r in branches:
-        if r.get('relation') == 'issuer':
-            continue
-        groups[r['branchCode']].append(r)
-        if r['net'] > 0 and r['streak'] >= 3 and numeric(spot_pct) and spot_pct != 0:
-            kind = ('call-' if r['cp']=='C' else 'put-') + ('up' if spot_pct>0 else 'down')
-            hints.append({'kind': kind, 'branchCode': r['branchCode'], 'branchName': r['branchName'],
-                          'a': r['code'], 'aNet': r['net'], 'streak': r['streak'], 'streakCapped':r['streakCapped'],
-                          'sameBroker': r.get('relation') == 'sameBroker'})
-    for branch, rows in groups.items():
-        buys = sorted((r for r in rows if r['net']>0), key=lambda r:-r['net'])
-        sells = sorted((r for r in rows if r['net']<0), key=lambda r:r['net'])
-        calls, puts = [r for r in buys if r['cp']=='C'], [r for r in buys if r['cp']=='P']
-        if calls and puts:
-            a,b = calls[0], puts[0]
-            hints.append({'kind':'both','branchCode':branch,'branchName':a['branchName'],
-                          'a':a['code'],'aNet':a['net'],'b':b['code'],'bNet':b['net'],
-                          'sameTerms': bool(a.get('expiry') and a['expiry']==b.get('expiry') and positive(a.get('strike')) and a['strike']==b.get('strike')),
-                          'sameBroker': 'sameBroker' in (a.get('relation'), b.get('relation'))})
-        for cp in ('C','P'):
-            short = [r for r in sells if r['cp']==cp and r.get('remainingDays') is not None and 0<=r['remainingDays']<=30]
-            long = [r for r in buys if r['cp']==cp and r.get('remainingDays') is not None and r['remainingDays']>=60]
-            if short and long:
-                a,b = short[0],long[0]
-                hints.append({'kind':'roll','branchCode':branch,'branchName':a['branchName'],'cp':cp,
-                              'a':a['code'],'aNet':a['net'],'aDays':a['remainingDays'],
-                              'aExpiry':a.get('expiry'),'aStrike':a.get('strike'),'aRatio':a.get('ratio'),
-                              'b':b['code'],'bNet':b['net'],'bDays':b['remainingDays'],
-                              'bExpiry':b.get('expiry'),'bStrike':b.get('strike'),'bRatio':b.get('ratio'),
-                              'sameBroker': 'sameBroker' in (a.get('relation'), b.get('relation'))})
-    return sorted(hints,key=lambda h:(h['kind'], -abs(h['aNet']), h['branchCode'],h['a']))
-
 
 def summarize(day, rows, previous, previous_spot, payloads, calendar):
     rows = [r for r in rows if standard(r)]
@@ -149,7 +86,7 @@ def summarize(day, rows, previous, previous_spot, payloads, calendar):
     spot = next(iter(spots)) if len(spots)==1 else None
     old = {identity(r):r for r in previous}
     record = {'date':day,'spot':spot,'spotPct':price_change(spot,previous_spot),
-              'signalRules': {k:RULES[k] for k in ('version','branchStreak','rollSellDays','rollBuyDays','issuerPolicy')},
+              'signalRules': dict(SIGNAL_RULES), 'issuerRulesSha256': RULES_SHA256,
               'spotStatus':'同日標的價一致' if len(spots)==1 else '標的價缺漏或來源不一致',
               'previousDate':sessions(day,1,calendar)[0], 'count':len(rows), 'active':0,
               'branchWarrants':0,'branchRows':0, 'branchVolume':0,'branchIssues':0, 'sides':{}}
@@ -211,7 +148,7 @@ def summarize(day, rows, previous, previous_spot, payloads, calendar):
     top.sort(key=lambda r:(-r['volume'],r['code']))
     record['topWarrants']=top[:RULES['topWarrants']]
     record['leaders']=leaders(all_branches)
-    record['customerLeaders']=leaders([r for r in all_branches if r['relation']!='issuer'])
+    record['customerLeaders']=leaders([r for r in all_branches if r['relation'] in ('other','sameBroker')])
     record['marketMaking']=market_making(all_branches)
     record['relationRows']=dict(Counter(r['relation'] for r in all_branches))
     record['hints']=classify_hints(all_branches,record['spotPct'])

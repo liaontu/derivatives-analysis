@@ -11,6 +11,7 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import time
 import urllib.request
@@ -426,6 +427,9 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
     collect_quality(output, manifest, read, save, today, now, calendar=calendar)
     # An unchanged rerun leaves every file, including the manifest, byte-identical.
     save(output / "manifest.json", stamp(manifest, old_manifest, now))
+    save(output / 'collection-steps.json', {'checkedAt': now, 'runId': os.environ.get('GITHUB_RUN_ID'),
+         'modules': {key: ('failure' if feed in errors else 'success') for key, feed in
+                     [('lab','warrant-lab'), ('lab_reports','warrant-lab-reports'), ('focus','warrant-focus'), ('spreads','warrant-spreads')]}})
     return errors
 
 

@@ -551,6 +551,11 @@ def run(output, today, kind, now):
             index.update(status='retained', error=f'{name}: {exc}')
             save_json(path, index)
             errors.append(f'{name}: {exc}')
+    if errors:
+        path = output / 'warrant-series-reports.json'
+        index = read_json(path) or {'schemaVersion': 1, 'items': [], 'latest': {}}
+        index.update(status='retained', error='; '.join(errors))
+        save_json(path, index)
     return results, errors
 
 

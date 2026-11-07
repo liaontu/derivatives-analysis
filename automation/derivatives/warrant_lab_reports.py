@@ -60,7 +60,7 @@ def build_observation(lab, report_date):
         prior = curve[-2]['equity'] if len(curve) > 1 else lab['rules']['initialCash']
         daily_change = (money(equity - prior) if events and last and last['date'] == report_date
                         and equity is not None and prior is not None else None)
-        accounts.append({'id': key, 'name': names[key], 'description': DESCRIPTIONS[key],
+        accounts.append({'id': key, 'name': names[key], 'description': DESCRIPTIONS[key].replace('有效觀察期','交易日').replace('持有 5 期','持有 5 交易日') if lab['rules']['version']=='warrant-paper-v3' else DESCRIPTIONS[key],
                          'startedOn': lab.get('accountStartedOn', {}).get(key, lab['startedOn']),
                          'observations': len(curve), 'asOf': last['date'] if last else None,
                          'equity': equity, 'cash': acc['cash'], 'dailyChange': daily_change,
@@ -86,7 +86,7 @@ def build_observation(lab, report_date):
         observations.append('共同觀察區間尚不足兩個資料日，暫不比較不同開始日期的累積報酬。')
     observations.append(today_review[-1]['result'] if today_review else '本次未到策略檢查時點；目前規則保持不變，繼續累積新資料。')
     if any(a['unresolved'] for a in accounts):
-        observations.append('有部位缺行情或量能不足；相關淨值標示待確認，不用舊估價宣告獲利。')
+        observations.append('有部位缺有效行情、條款變更或待履約確認；相關淨值標示待確認，不用舊估價宣告獲利。')
     return {'schemaVersion': 1, 'reportDate': report_date, 'marketDate': lab['lastMarketDate'],
             'labStatus': lab['status'], 'labMessage': lab.get('error') or lab.get('message'),
             'rulesVersion': lab['rules']['version'], 'rules': lab['rules'],

@@ -72,7 +72,7 @@ jobs:
         run: python automation/derivatives/warrant_signal_backtest.py
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market ${{ steps.collect.outcome }} ${{ steps.directory.outcome }} ${{ steps.option_history.outcome }} ${{ steps.stock_options.outcome }} ${{ steps.reports.outcome }} ${{ steps.journal.outcome }} ${{ steps.relationship.outcome }} ${{ steps.signal_backtest.outcome }}
+        run: python automation/derivatives/check_status.py market collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }}
       - name: Commit data and source status
         id: commit
         run: |

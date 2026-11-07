@@ -109,7 +109,7 @@ export function createSeriesReports({ load, table, tr, select, metric, empty }) 
     const latest = index?.latest || {};
     const chosen = items.some(i => i.id === state.id) ? state.id : (latest.weekly && items.some(i => i.id === latest.weekly) ? latest.weekly : items[0]?.id || '');
     const picker = select('series-report-id', '報告', items.map(i => i.id), chosen, id => reportLabel(items.find(i => i.id === id)));
-    const header = `<section class="panel"><div class="panel-head"><div><span class="eyebrow">WARRANT SERIES REPORTS</span><h2>權證與標的收盤序列</h2><p class="muted">每週六整理週一至週五 · 每月第一個週六整理上一個月 · 同期間改版保留舊版 · 免費下載</p></div>${items.length ? picker : ''}</div>`;
+    const header = `<section class="panel series-report"><div class="panel-head"><div><span class="eyebrow">WARRANT SERIES REPORTS</span><h2>權證與標的收盤序列</h2><p class="muted">每週六整理週一至週五 · 每月第一個週六整理上一個月 · 同期間改版保留舊版 · 免費下載</p></div>${items.length ? picker : ''}</div>`;
     const warning = index?.status === 'retained' ? `<div class="notice warning">${esc(index.error || '本次報告未更新，以下保留舊版本。')}</div>` : '';
     if (!chosen) return header + warning + empty('尚無可讀取的週報或月報；等待週六排程產生。') + '</section>';
     const report = await load(`warrant-series-reports/${chosen}`).catch(() => null);

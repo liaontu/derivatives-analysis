@@ -1,5 +1,5 @@
 """Build same-session Taiwan standard single-stock call/put observations."""
-from datetime import date
+from datetime import date, datetime, timezone
 import argparse
 import csv
 import hashlib
@@ -8,6 +8,9 @@ import json
 import math
 from pathlib import Path
 import re
+import time
+import urllib.request
+import urllib.error
 
 if __package__:
     from .collect import fetch, number, request_bytes
@@ -75,20 +78,54 @@ def decode_roster(raw):
     return list(csv.DictReader(io.StringIO(text, newline=None))), 'CSV'
 
 
-def fetch_contracts():
+def request_roster(url):
+    request = urllib.request.Request(url, headers={'User-Agent':'derivatives-research/1','Accept':'application/json,text/csv,text/plain'})
+    try:
+        response = urllib.request.urlopen(request, timeout=30)
+    except urllib.error.HTTPError as error:
+        response = error
+    with response:
+        raw = response.read(2_000_001)
+        metadata = {'httpStatus':response.status, 'contentType':response.headers.get('Content-Type','')}
+    return raw, metadata
+
+
+def fetch_contracts(output=None, requester=None, sleep=time.sleep, attempts=2):
     """Recognize both official schemas, with a validated free official CSV fallback."""
-    failures = []
-    for url in (LIST_URL, LIST_CSV):
-        try:
-            raw = request_bytes(url)
-            rows, format_name = decode_roster(raw)
-            contracts = stock_contracts(rows)
-            return contracts, {'url': url, 'format': format_name, 'sha256': hashlib.sha256(raw).hexdigest(),
-                               'rows': len(rows), 'stockContracts': len(contracts),
-                               'fields': sorted(rows[0]), 'fallback': url != LIST_URL}
-        except Exception as exc:
-            failures.append(type(exc).__name__ + ': ' + str(exc)[:180])
-    raise ValueError('兩個官方名單來源均未通過核對；' + '；'.join(failures))
+    requester = requester or request_roster
+    failures, evidence = [], None
+    for attempt in range(attempts):
+        for url in (LIST_URL, LIST_CSV):
+            raw, metadata, rows = b'', {}, None
+            try:
+                raw, metadata = requester(url)
+                if metadata.get('httpStatus') != 200:
+                    raise ValueError('Unexpected HTTP status')
+                content_type = metadata.get('contentType','').lower().split(';')[0].strip()
+                if content_type not in ('application/json','text/json','text/csv','application/csv','text/plain','application/octet-stream','application/vnd.ms-excel'):
+                    raise ValueError('Unexpected roster content-type')
+                if len(raw)>2_000_000:
+                    raise ValueError('Roster exceeds size limit')
+                rows, format_name = decode_roster(raw)
+                contracts = stock_contracts(rows)
+                return contracts, {'url': url, 'format': format_name, 'sha256': hashlib.sha256(raw).hexdigest(),
+                                   'rows': len(rows), 'stockContracts': len(contracts), **metadata,
+                                   'fields': sorted(rows[0]), 'fallback': url != LIST_URL,
+                                   'attempt':attempt+1, 'failureEvidence':evidence}
+            except Exception as exc:
+                failures.append({'url':url, 'attempt':attempt+1, **metadata, 'error':type(exc).__name__+': '+str(exc)[:180],
+                                 'sha256':hashlib.sha256(raw).hexdigest(), 'bytes':len(raw),
+                                 'sample':raw[:2048].decode('utf8',errors='replace'),
+                                 'fields':sorted(rows[0]) if isinstance(rows,list) and rows and isinstance(rows[0],dict) else None})
+                if output is not None:
+                    stamp = datetime.now(timezone.utc).isoformat(timespec='microseconds')
+                    evidence = INDEX+'/failures/'+stamp.replace(':','').replace('+','-')+'.json'
+                    save_text(output/evidence, serialize({'checkedAt':stamp,'attempts':failures}))
+        if attempt+1 < attempts:
+            sleep(120)
+    error = ValueError('兩個官方名單來源均未通過核對；'+ '；'.join(f['error'] for f in failures))
+    error.evidence = evidence
+    raise error
 
 
 def positive(v):
@@ -190,7 +227,7 @@ def main():
     parser.add_argument('--data', type=Path, default=Path('data/derivatives'))
     args = parser.parse_args()
     try:
-        contracts, roster = fetch_contracts()
+        contracts, roster = fetch_contracts(args.data)
         options = read(args.data / 'options.json')
         publish(args.data, options, contracts, roster)
         print(serialize({'date': options['date'], 'status': 'ok', 'roster': roster}))
@@ -199,6 +236,8 @@ def main():
         previous = read(path) if path.exists() else {'dates': [], 'latest': None, 'rosterUrl': LIST_URL}
         previous['status'] = 'retained'
         previous['error'] = str(exc)[:400]
+        previous['failureEvidence'] = getattr(exc, 'evidence', None)
+        previous['lastAttemptAt'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
         save_text(path, serialize(previous))
         raise
 

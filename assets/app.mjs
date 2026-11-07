@@ -1,5 +1,6 @@
 import { finite, fmt, esc, priceStatus, taipeiTime, cpLabel, warrantCp, warrantStyle, warrantSortLabels, warrantUnderlyings, resolveWarrantUnderlying, taipeiToday, daysUntil, filterWarrants, oiDistribution, previousOi, toCSV, isStaleSource, setTradingCalendar, taiwanTradingAge, chartFrames, chartGutter } from './model.mjs';
 import { createDirectory } from './directory.mjs';
+import {pipelineHealth} from './pipeline-health.mjs';
 import { createStockOptions } from './stock-options.mjs';
 import { createOptionHistory } from './option-history.mjs';
 import { createReports } from './daily-reports.mjs';
@@ -326,8 +327,18 @@ async function render() {
     if (route === 'warrant-branches') { const check = await load('check-branches').catch(() => null); if (token !== generation) return; $('#notice').textContent = `${calendarNotice}富邦證券公開排行／嘉實資訊 · 非全部分點 · 最近檢查（台北）：${checkLabel(check)}`; $('#notice').classList.toggle('warning', !!calendarNotice); }
     $('#page-region').textContent = route.startsWith('us-') ? 'UNITED STATES DERIVATIVES' : ['futures', 'options', 'option-history', 'stock-options', 'warrant-report', 'warrant-relationship', 'warrant-signal-backtest', 'warrant-volume-report', 'position-report', 'series-report', 'warrants', 'warrant-directory', 'warrant-branches', 'daily-watch', 'warrant-daily', 'warrant-focus', 'warrant-spreads', 'warrant-lab'].includes(route) ? 'TAIWAN DERIVATIVES' : 'TAIWAN + UNITED STATES';
     const html = route === 'option-history' ? await optionHistory.page() : route === 'warrant-signal-backtest' ? await signalBacktest.page() : route === 'warrant-relationship' ? await warrantRelationship.page() : route === 'warrant-report' ? await warrantJournal.page() : route === 'quality' ? governancePage(...await Promise.all([load('data-quality').catch(() => null), load('warrant-spreads').catch(() => null)]), manifest.updatedAt || manifest.checkedAt) : ['warrant-volume-report','position-report'].includes(route) ? await dailyReports.page(route) : route === 'series-report' ? await seriesReports.page() : route === 'stock-options' ? await stockOptions.page() : route === 'overview' ? await overview() : ['futures', 'options'].includes(route) ? await positioning(route) : route === 'us-futures' ? await us.futures() : route === 'us-options' ? await us.options() : route === 'warrants' ? await warrants() : route === 'warrant-directory' ? await directory.page() : route === 'warrant-branches' ? await branches.page() : route === 'warrant-lab' ? await warrantLab.page() : route === 'warrant-focus' ? await focusWatch.page() : route === 'warrant-daily' ? await warrantDaily.page() : route === 'daily-watch' ? await dailyWatch.page() : route === 'warrant-spreads' ? await spreadWatch.page() : await sources();
+    const health = ['overview','sources'].includes(route) ? await pipelineHealth({load,table,tr}) : '';
     if (token !== generation) return;
-    $('#content').innerHTML = html;
+    $('#content').innerHTML = html + health;
+    if (health && document.querySelector('.pipeline-health .warning')) {
+      $('#notice').classList.add('warning');
+      $('#notice').append(' 分析模組有步驟未確認成功，請查看下方的逐項更新結果。');
+    }
+    const activeNav=document.querySelector('[data-nav].active');
+    if(activeNav && matchMedia('(max-width: 800px)').matches) {
+      const nav=activeNav.parentElement;
+      nav.scrollLeft=activeNav.offsetLeft-nav.offsetLeft-(nav.clientWidth-activeNav.clientWidth)/2;
+    }
     bind(route);
   } catch (error) {
     if (token !== generation) return;

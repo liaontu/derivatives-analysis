@@ -13,15 +13,20 @@ try:
     from .daily_reports import read, save, aligned, baseline_days, WARRANT_SOURCES, traded, volume_exclusion
     from .warrant_focus import numeric, percent, volume_evidence, spread_evidence, RULES as FOCUS_RULES
     from .trading_calendar import load_calendar
+    from .warrant_issuers import issuer_of, branch_relation, customer_eligible, POLICY, RULES_SHA256
+    from .warrant_signals import SIGNAL_RULES
 except ImportError:
     from daily_reports import read, save, aligned, baseline_days, WARRANT_SOURCES, traded, volume_exclusion
     from warrant_focus import numeric, percent, volume_evidence, spread_evidence, RULES as FOCUS_RULES
     from trading_calendar import load_calendar
+    from warrant_issuers import issuer_of, branch_relation, customer_eligible, POLICY, RULES_SHA256
+    from warrant_signals import SIGNAL_RULES
 
-VERSION = 'warrant-journal-v1'
+VERSION = 'warrant-journal-v2'
 RULES = {'version': VERSION, 'minVolume': 100, 'volumeMultiple': 2, 'volumeWindow': 5,
          'zThreshold': FOCUS_RULES['zThreshold'], 'spreadWindow': 20, 'spreadModel': FOCUS_RULES['spreadModel'],
-         'branchStreak': 3, 'shortlistSize': 50, 'maxPerUnderlying': 2,
+         'branchStreak': SIGNAL_RULES['branchStreak'], 'issuerPolicy': POLICY, 'issuerRulesSha256': RULES_SHA256,
+         'shortlistSize': 50, 'maxPerUnderlying': 2,
          'trackingSize': 20, 'trackingBasis': '每版前20檔，日內依權證去重', 'horizons': [1, 3, 5, 10], 'expiryAlerts': [14, 30],
          'description': '固定研究門檻，尚未驗證交易有效性；不辨識大戶身分、不估算分點庫存。'}
 TAGS = {'volume': '成交量放大', 'spread': 'Z 值異常', 'buy': '分點持續買超',
@@ -73,7 +78,9 @@ def branch_evidence(quote, payload, calendar):
         return None
     days = sessions(day, 11, calendar, include=True)
     maps = {d: valid_rows(h) for d, h in history.items()}
-    rows = maps.get(day, {})
+    issuer = issuer_of(quote.get('name'))
+    raw_rows = [{**r, 'issuer':issuer, 'relation':branch_relation(r['branchName'], issuer)} for r in maps.get(day, {}).values()]
+    rows = {r['branchCode']:r for r in raw_rows if customer_eligible(r['relation'])}
     def streak(code, start, sign):
         result = 0
         for d in days[start:]:
@@ -100,13 +107,14 @@ def branch_evidence(quote, payload, calendar):
             points.append([d, r['net'] if r else None,
                            'observed' if r else 'unranked' if d in history else 'missing'])
         signals.append({'branchCode': code, 'branchName': row['branchName'], 'buy': row['buy'],
+                        'relation':row['relation'], 'issuer':issuer,
                         'sell': row['sell'], 'net': row['net'], 'streak': run, 'priorOppositeStreak': previous,
                         'streakCapped': run == len(days), 'priorOppositeCapped': previous == len(days) - 1,
                         'tags': tags, 'points': points, 'observedDays': sum(p[1] is not None for p in points),
                         'observedNet': sum(p[1] for p in points if p[1] is not None)})
     buy = sum(sorted((r['net'] for r in rows.values() if r['net'] > 0), reverse=True)[:3])
     sell = sum(sorted((-r['net'] for r in rows.values() if r['net'] < 0), reverse=True)[:3])
-    return {'signals': signals, 'rankedBranches': len(rows),
+    return {'signals': signals, 'rankedBranches': len(raw_rows), 'rankedRows':raw_rows,
             'top3BuyPct': 100 * buy / quote['volume'] if quote['volume'] > 0 else None,
             'top3SellPct': 100 * sell / quote['volume'] if quote['volume'] > 0 else None}
 
@@ -167,7 +175,7 @@ def build(output, calendar):
         branch_sources.append({'code': item['code'], 'date': day, 'url': payload.get('sourceUrl'),
                                'fetchedAt': payload.get('fetchedAt'), 'digest': digest(payload.get('history', []))})
     baseline = baseline_days(day, calendar)
-    candidates, branch_signals, decisions = [], [], {}
+    candidates, branch_signals, decisions, issuer_flows, unknown_flows = [], [], {}, [], []
     quality = Counter()
     for code, row in catalog.items():
         history = histories.get(row['underlying'], {})
@@ -178,6 +186,11 @@ def build(output, calendar):
         p = sorted(peers.get(code, []), key=lambda x: (-int(x['signal']), -abs(x.get('z') or 0), x['peerCode']))
         peer = p[0] if p else None
         b = branches.get(code)
+        if b:
+            for ranked in b['rankedRows']:
+                item = {**{k:row.get(k) for k in ('code','name','underlying','underlyingName','cp')}, **ranked}
+                if ranked['relation'] == 'issuer': issuer_flows.append(item)
+                if ranked['relation'] == 'unknown': unknown_flows.append(item)
         tags = (['volume'] if v['signal'] else []) + (['spread'] if peer and peer['signal'] else [])
         if b:
             for signal in b['signals']:
@@ -224,7 +237,8 @@ def build(output, calendar):
             'sources': sources, 'branchSources': branch_sources, 'directoryDates': directory['sourceDates'],
             'summary': summary, 'volumeExcluded': volume['excluded'], 'volumeQuality': dict(quality),
             'branchIssues': dict(branch_issues), 'spreadCoverage': spread_coverage, 'baselineDates': baseline, 'stocks': stocks,
-            'shortlist': shortlist, 'branches': branch_signals, 'previousDate': previous['date'] if previous else None,
+            'shortlist': shortlist, 'branches': branch_signals, 'issuerFlows':issuer_flows,
+            'unknownIssuerFlows':unknown_flows, 'previousDate': previous['date'] if previous else None,
             'changes': changes, 'limits': ['分點為買超、賣超各最多15名；未入榜不等於零交易。',
                 '分點代表交易通路，不能辨識單一大戶、推算實際庫存或確認收貨出貨。',
                 '排名以訊號種類數、量增倍數、成交量排序，每個標的最多2檔；不是獲利機率。',
@@ -253,7 +267,7 @@ def seal(output, report, now):
 
 def seed_research(output):
     """Freeze a separate exploratory cohort; never label backfilled signals live."""
-    path = output / 'daily-reports/warrant-journal/research-cohort.json'
+    path = output / 'daily-reports/warrant-journal/cohorts' / VERSION / 'research-cohort.json'
     if path.exists():
         return read(path)
     cohorts = []
@@ -270,11 +284,11 @@ def seed_research(output):
 
 
 def capture(output, report):
-    path = output / 'daily-reports/warrant-journal/recorded-cohort.json'
+    path = output / 'daily-reports/warrant-journal/cohorts' / VERSION / 'recorded-cohort.json'
     data = optional(path, {'rules': RULES, 'basis': '啟用後封存觀察；產生時間不等於已驗證上線時間，非即時樣本外績效。', 'items': []})
     seen = {r['id'] for r in data['items']}
     for item in report['shortlist'][:RULES['trackingSize']]:
-        key = report['date'] + ':' + item['code']
+        key = VERSION + ':' + report['date'] + ':' + item['code']
         if key not in seen:
             data['items'].append({**{k: item.get(k) for k in ('code', 'name', 'market', 'cp', 'underlying', 'underlyingName', 'expiry', 'lastTrade', 'tags')},
                                  'id': key, 'signalDate': report['date'], 'recordedAt': report['recordedAt'],
@@ -319,6 +333,19 @@ def outcome(event, histories, as_of, calendar):
 
 
 def track(output, report, histories, calendar):
+    folder = output / 'daily-reports/warrant-journal'
+    old = optional(folder / 'outcomes.json', {})
+    if old and old.get('rules',{}).get('version') != VERSION:
+        version = old.get('rules',{}).get('version')
+        if version != 'warrant-journal-v1':
+            raise ValueError('未知日報追蹤規則，拒絕覆寫')
+        for name in ('outcomes.json','research-cohort.json','recorded-cohort.json'):
+            origin, target = folder/name, folder/'versions'/version/name
+            if not origin.exists(): raise ValueError('舊日報樣本缺檔：'+name)
+            raw = origin.read_bytes()
+            if target.exists() and target.read_bytes() != raw: raise ValueError('日報封存內容不符：'+name)
+            if not target.exists():
+                target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(raw)
     research, recorded = seed_research(output), capture(output, report)
     all_events = research['items'] + recorded['items']
     # Expired/removed underlyings remain evaluable from archived histories.

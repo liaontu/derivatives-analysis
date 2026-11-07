@@ -7,8 +7,12 @@ import math
 
 try:
     from .warrant_spreads import exclusion, positive
+    from .trading_calendar import default_calendar, load_calendar
+    from . import warrant_lab_legacy
 except ImportError:
     from warrant_spreads import exclusion, positive
+    from trading_calendar import default_calendar, load_calendar
+    import warrant_lab_legacy
 
 STRATEGIES = [
     {'id': 'volume2-h5', 'name': '量增 2 倍・持有 5 期', 'volume': 2, 'hold': 5},
@@ -30,7 +34,10 @@ STRATEGIES = STRATEGIES + [
     {'id': 'pullback-volume-h5', 'name': '量增逆勢回落・持有 5 期', 'volume': 2, 'direction': 'pullback', 'hold': 5},
     {'id': 'dual-low-volume-h5', 'name': '價差偏低＋量增・持有 5 期', 'volume': 2, 'z': -2, 'hold': 5},
 ]
-RULES = {**RULES, 'version': 'warrant-paper-v2', 'strategies': STRATEGIES}
+RULES = {**RULES, 'version': 'warrant-paper-v3', 'strategies': STRATEGIES,
+         'valuation': 'same-day-traded-close; missing prices remain estimates only',
+         'holdingPeriod': 'verified-trading-calendar', 'liquidity': 'fills-only',
+         'termsChanges': 'unresolved-until-reviewed', 'researchPromotion': False}
 SOURCES = ('twse-warrants', 'twse-volume', 'twse-volume-put')
 IDENTITY = ('code', 'underlying', 'cp', 'expiry')
 TERMS = IDENTITY + ('strike', 'ratio', 'lastTrade', 'style')
@@ -66,12 +73,15 @@ def account():
 
 def protected(report):
     keys = ('rules', 'startedOn', 'currentRule', 'lastMarketDate', 'dayCount', 'lastReviewCount', 'accounts', 'reviews')
-    if report['rules']['version'] == 'warrant-paper-v2':
+    if report['rules']['version'] == 'warrant-paper-v3':
         keys += ('accountStartedOn', 'migrations')
+        keys += ('mode', 'activationDate', 'replayEvidence')
     return {k: report[k] for k in keys}
 
 
 def validate(report, legacy=False):
+    if report['rules'].get('version') in ('warrant-paper-v1', 'warrant-paper-v2'):
+        return warrant_lab_legacy.validate(report, legacy=report['rules']['version'] == 'warrant-paper-v1')
     if report['rules'] != (LEGACY_RULES if legacy else RULES) or report['stateSha256'] != digest(protected(report)):
         raise ValueError('Paper configuration or state changed; explicit version migration required')
     previous = None
@@ -84,28 +94,20 @@ def validate(report, legacy=False):
 
 
 def migrate(old, now, today):
-    """Add zero-history candidates without touching prior accounts, events or reviews."""
-    validate(old, legacy=True)
-    report = deepcopy(old)
-    report.update(schemaVersion=2, rules=deepcopy(RULES), accountStartedOn={k: old['startedOn'] for k in old['accounts']})
-    for strategy in STRATEGIES:
-        if strategy['id'] not in report['accounts']:
-            report['accounts'][strategy['id']] = account()
-            report['accountStartedOn'][strategy['id']] = today
-    report['migrations'] = [{'at': now, 'from': LEGACY_RULES['version'], 'to': RULES['version'],
-                             'previousStateSha256': old['stateSha256'], 'archive': 'warrant-lab-archives/warrant-paper-v1.json'}]
+    """A new forward experiment never imports legacy positions or historical profits."""
+    validate(old)
+    report = new_report(now, today)
+    version = old['rules']['version']
+    report['migrations'] = [{'at': now, 'from': version, 'to': RULES['version'],
+                             'previousStateSha256': old['stateSha256'], 'archive': 'warrant-lab-archives/'+version+'.json'}]
     report['stateSha256'] = digest(protected(report))
-    event = {'type': 'strategy-extension', 'at': now, 'marketDate': None, 'actions': [],
-             'stateSha256': report['stateSha256'], 'previousSha256': old['journal'][-1]['sha256'] if old['journal'] else None,
-             'migration': report['migrations'][-1]}
-    event['sha256'] = digest(event)
-    report['journal'].append(event)
     validate(report)
     return report
 
 
-def new_report(now, today):
-    result = {'schemaVersion': 2, 'rules': deepcopy(RULES), 'createdAt': now, 'startedOn': today,
+def new_report(now, today, mode='forward', evidence=None):
+    result = {'schemaVersion': 3, 'rules': deepcopy(RULES), 'createdAt': now, 'startedOn': today,
+              'mode': mode, 'activationDate': today, 'replayEvidence': evidence,
               'currentRule': STRATEGIES[0]['id'], 'lastMarketDate': None, 'dayCount': 0, 'lastReviewCount': 0,
               'accounts': {key: account() for key in ['adaptive'] + [s['id'] for s in STRATEGIES]},
               'reviews': [], 'journal': [], 'accountStartedOn': {key: today for key in ['adaptive'] + [s['id'] for s in STRATEGIES]}, 'migrations': []}
@@ -115,6 +117,12 @@ def new_report(now, today):
 
 def same_issue(position, row):
     return row and all(position.get(k) == row.get(k) for k in IDENTITY)
+
+
+def markable(position, row):
+    return (same_issue(position, row) and all(position.get(k) == row.get(k) for k in TERMS)
+            and row.get('termsDate') == row.get('date') and positive(row.get('price'))
+            and positive(row.get('volume')) and row['date'] <= row['lastTrade'])
 
 
 def eligible(row, day):
@@ -155,7 +163,7 @@ def settle(acc, quotes, day, actions, key):
             continue
         row = quotes.get(order['code'])
         pos = next((p for p in acc['positions'] if p['code'] == order['code']), None)
-        valid = row and same_issue(order, row)
+        valid = row and same_issue(order, row) and positive(row.get('price')) and positive(row.get('volume')) and day <= row['lastTrade']
         if order['side'] == 'buy':
             valid = (valid and eligible(row, day) and days(day, order['decisionDate']) <= RULES['maxOrderAgeDays'] and all(row.get(k) == order.get(k) for k in TERMS)
                      and pos is None and len(acc['positions']) < RULES['maxPositions'])
@@ -170,7 +178,7 @@ def settle(acc, quotes, day, actions, key):
             acc['positions'].append({**order, 'lots': lots, 'entryDate': day, 'entryClose': row['price'],
                                      'cost': cost, 'periods': 0, 'lastPrice': row['price'], 'markDate': day, 'stale': False})
             actions.append({'account': key, 'type': 'buy', 'code': order['code'], 'lots': lots, 'cost': cost, 'decisionDate': order['decisionDate'], 'strategy': order['strategy']})
-        elif pos and valid and math.floor(row['volume'] * RULES['participation']) >= pos['lots']:
+        elif pos and valid and markable(pos, row) and math.floor(row['volume'] * RULES['participation']) >= pos['lots']:
             proceeds = cashflow(row['price'], pos['lots'], 'sell')
             trade = {'code': pos['code'], 'name': pos['name'], 'underlying': pos['underlying'], 'strategy': pos['strategy'],
                      'entryDate': pos['entryDate'], 'exitDate': day, 'lots': pos['lots'], 'cost': pos['cost'],
@@ -181,28 +189,34 @@ def settle(acc, quotes, day, actions, key):
             acc['positions'].remove(pos)
             actions.append({'account': key, 'type': 'sell', **trade})
         elif pos:
+            order.update(status='pending', lastAttempt=day, reasonCode='UNFILLED_LIQUIDITY_OR_QUOTE')
             remaining.append(order)
             actions.append({'account': key, 'type': 'unfilled-sell', 'code': pos['code'], 'reason': '缺有效行情／已停交易／量能不足，未假設成交'})
     acc['orders'] = remaining
 
 
-def mark_and_plan(acc, quotes, focus, strategy, day, actions, key):
+def mark_and_plan(acc, quotes, focus, strategy, day, actions, key, calendar=None):
+    calendar = calendar or default_calendar()
     value, complete = acc['cash'], True
     for pos in acc['positions']:
         row = quotes.get(pos['code'])
-        valid = same_issue(pos, row) and math.floor(row['volume'] * RULES['participation']) >= pos['lots']
+        valid = markable(pos, row)
         pos['stale'] = not valid
+        pos['periods'] = calendar.age(pos['entryDate'], day)
+        pos['liquidityLimited'] = not row or not positive(row.get('volume')) or math.floor(row['volume'] * RULES['participation']) < pos['lots']
+        pos['valuationStatus'] = ('current' if valid else 'settlement-required' if day > pos['lastTrade']
+                                  else 'terms-changed' if row and not all(pos.get(k) == row.get(k) for k in TERMS)
+                                  else 'missing-trade-price')
         if valid:
             pos.update(lastPrice=row['price'], markDate=day)
-            if pos['entryDate'] < day:
-                pos['periods'] += 1
         else:
             complete = False
+        pos['staleSessions'] = calendar.age(pos['markDate'], day)
         value += cashflow(pos['lastPrice'], pos['lots'], 'sell')
         if any(o['code'] == pos['code'] and o['side'] == 'sell' for o in acc['orders']):
             continue
         change = pos['lastPrice'] / (pos['entryClose'] * (1 + RULES['slippage'])) - 1
-        reason = ('到期前退出' if days((row or pos)['lastTrade'], day) <= RULES['exitBufferDays'] else
+        reason = ('到期前退出' if days(pos['lastTrade'], day) <= RULES['exitBufferDays'] else
                   '停損條件' if valid and change <= RULES['stopLoss'] else
                   '停利條件' if valid and change >= RULES['takeProfit'] else
                   '持有期到達' if pos['periods'] >= pos['hold'] else None)
@@ -289,9 +303,10 @@ def review(report, day):
     report['currentRule'] = chosen
 
 
-def build_lab(old, warrants, feeds, focus, now, today):
+def build_lab(old, warrants, feeds, focus, now, today, calendar=None):
+    calendar = calendar or default_calendar()
     day_today = today.isoformat()
-    report = (migrate(old, now, day_today) if old and old.get('rules', {}).get('version') == LEGACY_RULES['version']
+    report = (migrate(old, now, day_today) if old and old.get('rules', {}).get('version') in ('warrant-paper-v1','warrant-paper-v2')
               else deepcopy(old) if old else new_report(now, day_today))
     validate(report)
     report.pop('checkedAt', None)
@@ -303,6 +318,9 @@ def build_lab(old, warrants, feeds, focus, now, today):
         report['message'] = '等待三個上市權證來源提供同日當日行情；不使用過期行情自動下模擬單。'
         return report
     day = day_today
+    if not calendar.is_open(day) or day < report['activationDate']:
+        report['message'] = '休市或早於新版啟用日，不新增模擬成交。'
+        return report
     # The shortlist must come from this market day's sources, never a stale file from an earlier run.
     focus_dates = {s.get('id'): s.get('date') for s in (focus or {}).get('sources', [])}
     if not focus or focus.get('status') not in ('ok', 'partial') or any(focus_dates.get(source) != day for source in SOURCES):
@@ -314,7 +332,7 @@ def build_lab(old, warrants, feeds, focus, now, today):
     all_rows = [r for r in warrants if r.get('market') == 'TWSE']
     if len({r['code'] for r in all_rows}) != len(all_rows):
         raise ValueError('Duplicate warrant codes')
-    quotes = {r['code']: r for r in all_rows if r.get('date') == day and not exclusion(r)}
+    quotes = {r['code']: r for r in all_rows if r.get('date') == day}
     if not quotes:
         raise ValueError('No valid same-day warrants')
     focus_items = [i for i in focus.get('items', []) if i.get('market') == 'TWSE' and i.get('date') == day]
@@ -322,10 +340,11 @@ def build_lab(old, warrants, feeds, focus, now, today):
     for key, acc in report['accounts'].items():
         settle(acc, quotes, day, actions, key)
         strategy = next(s for s in STRATEGIES if s['id'] == (before if key == 'adaptive' else key))
-        mark_and_plan(acc, quotes, focus_items, strategy, day, actions, key)
+        mark_and_plan(acc, quotes, focus_items, strategy, day, actions, key, calendar)
     report['dayCount'] += 1
     report['lastMarketDate'] = day
-    review(report, day)
+    if report['mode'] == 'forward':
+        review(report, day)
     report['stateSha256'] = digest(protected(report))
     entry = {'at': now, 'marketDate': day, 'inputSha256': digest({'warrants': all_rows, 'focus': focus_items, 'sources': sources}),
              'actions': actions, 'ruleBefore': before, 'ruleAfter': report['currentRule'], 'stateSha256': report['stateSha256'],
@@ -342,13 +361,21 @@ def collect_lab(output, warrants, feeds, now, today, read, save, focus=None):
     # The shortlist comes from the same run; a failed one is saved as retained and pauses new decisions.
     if focus is None:
         focus = read(output / 'warrant-focus.json') or {}
-    result = build_lab(old, warrants, feeds, focus, now, today)
-    if old and old.get('rules', {}).get('version') == LEGACY_RULES['version']:
-        archive = output / 'warrant-lab-archives' / 'warrant-paper-v1.json'
+    result = build_lab(old, warrants, feeds, focus, now, today, load_calendar(output))
+    if old and old.get('rules', {}).get('version') in ('warrant-paper-v1','warrant-paper-v2'):
+        archive = output / 'warrant-lab-archives' / (old['rules']['version']+'.json')
         existing = read(archive)
         if existing is not None and existing != old:
             raise ValueError('Existing legacy archive differs; refusing to overwrite')
         if existing is None:
             save(archive, old)
     save(output / 'warrant-lab.json', result)
+    versions = read(output / 'warrant-lab-versions.json') or {'active': RULES['version'], 'archives': []}
+    if old and old['rules']['version'] != RULES['version'] and old['rules']['version'] not in versions['archives']:
+        versions['archives'].append(old['rules']['version'])
+    versions['active'] = RULES['version']
+    for version in ('warrant-paper-v1', 'warrant-paper-v2'):
+        if (output / 'warrant-lab-archives' / (version+'.json')).exists() and version not in versions['archives']:
+            versions['archives'].append(version)
+    save(output / 'warrant-lab-versions.json', versions)
     return result

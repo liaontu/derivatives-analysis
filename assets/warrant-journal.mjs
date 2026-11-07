@@ -3,6 +3,7 @@ import {esc, finite, fmt, taipeiTime, toCSV} from './model.mjs';
 export const signalLabels = {volume:'成交量放大',spread:'Z 值異常',buy:'分點持續買超',sell:'分點持續賣超','to-buy':'分點賣超轉買超','to-sell':'分點買超轉賣超'};
 const signed = v => finite(v) ? (v>0?'+':'')+fmt(v,2)+'%' : '—';
 const side = cp => cp==='C'?'認購':cp==='P'?'認售':'未確認';
+const relationLabels={issuer:'發行商總公司（疑似造市）',sameBroker:'同券商分點',other:'其他券商分點',unknown:'發行商身分未確認'};
 const rate = (n,d) => d>0?fmt(n/d*100,2)+'%':'—';
 const labels = tags => (tags||[]).map(t=>signalLabels[t]||t).join('、');
 export function filterJournal(rows, query='', tag='all', cp='all') {
@@ -52,9 +53,16 @@ export function createWarrantJournal({load,table,tr,select,metric}) {
     return `<section class="panel"><h2>分點持續買賣與反轉</h2><p>連續至少 ${report.rules.branchStreak} 個交易日同方向入榜；缺資料或未入榜即中斷。${report.summary.branchCovered}／${report.summary.branchRequested} 檔追蹤權證取得同日分點。</p>
       <form id="journal-branch-search" class="filters"><label>分點／權證／標的<input name="branch" value="${esc(state.branch)}" placeholder="例如 國泰、元大、2330"></label><button>篩選分點</button></form>
       ${table(['權證／分點','觀察訊號','當日買／賣（張）','當日淨額（張）','連續／先前反向日數','五日已觀測淨額','完整度／每日證據'],rows.slice(state.bpage*pageSize,(state.bpage+1)*pageSize).map(r=>tr([
-        `${esc(r.code)} ${esc(r.name)}<small>${esc(r.branchName)} · ${esc(r.branchCode)} · ${side(r.cp)}</small>`,esc(labels(r.tags)),`${fmt(r.buy)}／${fmt(r.sell)}`,fmt(r.net),`${r.streakCapped?'≥':''}${r.streak}／${r.priorOppositeCapped?'≥':''}${r.priorOppositeStreak}`,fmt(r.observedNet),
-        `${r.observedDays}／5 日<details><summary>查看每日紀錄</summary>${r.points.map(([d,n,s])=>`<p>${esc(d)}：${s==='observed'?fmt(n)+' 張':s==='unranked'?'未入榜，無法觀測':'未取得排行'}</p>`).join('')}<p>入榜前三買超／賣超占成交量：${fmt(r.top3BuyPct,2)}%／${fmt(r.top3SellPct,2)}%。僅為已觀測交易比重，非持倉集中度。</p></details>`])))}${pagination}
+        `${esc(r.code)} ${esc(r.name)}<small>${esc(r.branchName)} · ${esc(r.branchCode)} · ${side(r.cp)}</small><small>${esc(relationLabels[r.relation]||"舊版未判定")}</small>`,esc(labels(r.tags)),`${fmt(r.buy)}／${fmt(r.sell)}`,fmt(r.net),`${r.streakCapped?'≥':''}${r.streak}／${r.priorOppositeCapped?'≥':''}${r.priorOppositeStreak}`,fmt(r.observedNet),
+        `${r.observedDays}／5 日<details><summary>查看每日紀錄</summary>${r.points.map(([d,n,s])=>`<p>${esc(d)}：${s==='observed'?fmt(n)+' 張':s==='unranked'?'未入榜，無法觀測':'未取得排行'}</p>`).join('')}<p>${report.rules.version==='warrant-journal-v2'?'排除發行商總公司與身分不明後，':''}入榜前三買超／賣超占成交量：${fmt(r.top3BuyPct,2)}%／${fmt(r.top3SellPct,2)}%。僅為已觀測交易比重，非持倉集中度。</p></details>`])))}${pagination}
       <p class="note">五日數字只加總有觀測值的日期，不是庫存；連續日數回看最多11日，達上限以 ≥ 顯示。來源張數取整，比重可能有誤差。分點不等於單一投資人；買超轉賣超也不能確認同一人出貨。${Object.entries(report.branchIssues).map(([k,v])=>esc(k)+' '+v+' 檔').join('；')}</p></section>`;
+  }
+  function issuerSupply(report) {
+    if(!report.issuerFlows) return '<p class="notice warning">此舊版尚未區分發行商；請查看最新修訂版。</p>';
+    const rows=filterJournal(report.issuerFlows,state.branch,'all',state.cp);
+    return `<section class="panel"><h2>發行商總公司供給（疑似造市）</h2><p>這些原始買賣數字保留，但不列入持續買賣、反轉或策略線索。身分依權證名稱與券商對照推定，無法辨識最終投資人。另有 ${report.unknownIssuerFlows?.length||0} 筆身分未確認，同樣排除。</p>
+    ${table(['權別','有排行筆數','發行商淨買賣（張）','反號市場淨買進粗估'],['C','P'].map(cp=>{const sideRows=rows.filter(r=>r.cp===cp);const net=sideRows.reduce((s,r)=>s+r.net,0);return tr([side(cp),sideRows.length,sideRows.length?fmt(net):'—',sideRows.length?fmt(-net):'—']);}))}
+    <details><summary>查看 ${rows.length} 筆造市原始數字</summary>${table(['權證','發行商分點','買／賣（張）','淨額（張）'],rows.map(r=>tr([esc(r.code)+' '+esc(r.name),esc(r.branchName),fmt(r.buy)+'／'+fmt(r.sell),fmt(r.net)])))}</details><p class="note">僅涵蓋追蹤清單與入榜分點；反號是該樣本交易流量，不是全市場總額、持倉或可靠下限。</p></section>`;
   }
   function tracking(data) {
     if (!data) return '<section class="panel"><h2>訊號後續觀察</h2><p>追蹤結果尚未產生，請稍後載入最新資料。</p></section>';
@@ -82,7 +90,7 @@ export function createWarrantJournal({load,table,tr,select,metric}) {
     const prefix='daily-reports/warrant-journal/';
     const report=await load(prefix+(revision?'revisions/'+day+'-'+revision:day));
     currentDay=day; selectedRevision=report.revision;
-    const outcomes=await load(prefix+'outcomes').catch(()=>null);
+    const outcomes=await load(prefix+(report.rules.version==='warrant-journal-v1'?'versions/warrant-journal-v1/':'')+'outcomes').catch(()=>null);
     const s=report.summary, ranked=heatRanking(report.stocks).slice(0,10);
     return `<div class="daily-report warrant-journal"><section class="panel"><div class="panel-head"><div class="filters">${select('journal-date','報告行情日',index.dates.slice().reverse(),day)}${select('journal-revision','保存版本',versions.map(v=>v.id),report.revision,id=>taipeiTime(versions.find(v=>v.id===id).recordedAt))}</div><button id="journal-print">列印目前畫面／PDF</button></div>
       <p>本版保存時間：${esc(taipeiTime(report.recordedAt))}。${report.status==='partial'?'分點尚未全部更新，先提供價量與已核對分點；後續補齊另存版本。':'本期行情與追蹤清單分點日期已核對。'}</p>
@@ -93,7 +101,7 @@ export function createWarrantJournal({load,table,tr,select,metric}) {
       <p><a href="#warrant-volume-report?date=${esc(day)}">完整量價日報與近月歷史 →</a> · <a href="#warrant-branches">原始分點排行 →</a> · <a href="#warrant-signal-backtest">分點線索回測 →</a> · <a href="data/derivatives/${prefix}revisions/${esc(day)}-${esc(report.revision)}.json" download>下載本版 JSON</a></p></section>
       <section class="panel"><h2>標的權證放量熱度</h2><p>至少 10 檔可比較權證的標的，按放量占比列前 10 名；同時呈現分母，認購、認售分開。</p>
       ${table(['標的','放量／可比較','放量比例','認購放量／可比','認售放量／可比'],ranked.map(r=>tr([`<button class="text-link" data-journal-stock="${esc(r.code)}">${esc(r.code)} ${esc(r.name)}</button>`,`${r.call+r.put}／${r.eligible}`,rate(r.call+r.put,r.eligible),`${r.call}／${r.callBase}`,`${r.put}／${r.putBase}`])))}</section>
-      ${shortlist(report)}${branches(report)}
+      ${shortlist(report)}${branches(report)}${issuerSupply(report)}
       <section class="panel"><h2>前期重點追蹤</h2><p>${report.previousDate?'比較上一份整合日報 '+esc(report.previousDate):'第一份整合日報；之後每天對照前期清單。'}</p>
       ${report.changes.length?`<details><summary>查看 ${report.changes.length} 檔的持續與變化</summary>${table(['權證','前期訊號','本期訊號','觀察結果'],report.changes.map(r=>tr([esc(r.code)+' '+esc(r.name),esc(labels(r.before)),esc(labels(r.after)||'未觀測到'),esc(r.status)])))}</details>`:''}</section>
       ${tracking(outcomes)}

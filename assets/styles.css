@@ -165,3 +165,7 @@ footer{display:flex;justify-content:space-between;gap:14px;padding:7px 0 26px;co
 .warrant-relationship td:last-child{white-space:normal;min-width:160px}.warrant-relationship .metrics .value{font-size:clamp(18px,2vw,28px);overflow-wrap:anywhere}.warrant-relationship details p{overflow-wrap:anywhere}.relationship-call{color:#118a85}.relationship-put{color:#a85b17}@media(max-width:700px){.warrant-relationship .panel{padding:16px}.warrant-relationship .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .signal-backtest>section{min-width:0}.signal-backtest .panel-head>div{min-width:0;max-width:100%}.signal-backtest p,.signal-backtest details{overflow-wrap:anywhere}.signal-backtest .signal-card td:last-child{white-space:normal;min-width:160px;max-width:250px}.signal-backtest .filters button{align-self:end}.signal-backtest .metric .value{font-size:clamp(22px,2.2vw,32px)}@media(max-width:680px){.signal-backtest .filters label{min-width:100%;max-width:100%}.signal-backtest .filters select{width:100%}}
+
+/* Report figures and evidence must fit narrow viewports. */
+.series-report .metric .value{font-size:clamp(18px,2vw,28px);overflow-wrap:anywhere;white-space:normal}.series-report code,.series-report p{overflow-wrap:anywhere}.series-report .metric .value i{display:block;font-size:14px}.pipeline-health td:last-child{white-space:normal;min-width:180px}.pipeline-health code{overflow-wrap:anywhere}
+.series-report .panel-head>label{min-width:0;max-width:100%}.series-report .panel-head select{max-width:100%;width:100%}

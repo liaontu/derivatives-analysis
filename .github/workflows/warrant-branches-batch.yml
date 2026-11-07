@@ -77,7 +77,7 @@ jobs:
         run: python automation/derivatives/warrant_signal_backtest.py
       - name: Record actual ranking check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py branches ${{ steps.collect.outcome }} ${{ steps.coverage.outcome }} ${{ steps.journal.outcome }} ${{ steps.relationship.outcome }} ${{ steps.signal_backtest.outcome }}
+        run: python automation/derivatives/check_status.py branches branches=${{ steps.collect.outcome }} coverage=${{ steps.coverage.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }}
       - name: Commit rankings and source status
         id: commit
         run: |

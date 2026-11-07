@@ -14,9 +14,11 @@ on:
         default: ''
 permissions:
   contents: write
+  pages: write
 concurrency:
-  group: derivatives-series-reports
+  group: derivatives-daily
   cancel-in-progress: false
+  queue: max
 jobs:
   reports:
     if: github.event.repository.private == false
@@ -30,15 +32,20 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build weekly and monthly warrant series reports
+        id: series
+        continue-on-error: true
         env:
           KIND: ${{ inputs.kind || 'auto' }}
           TODAY: ${{ inputs.today }}
         run: python automation/derivatives/warrant_series_reports.py --kind "$KIND" ${TODAY:+--today "$TODAY"}
+      - name: Record report generation result
+        run: python automation/derivatives/check_status.py series-reports series=${{ steps.series.outcome }}
       - name: Commit reports
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/derivatives/warrant-series-reports data/derivatives/warrant-series-reports.json
+          git add data/derivatives/check-series-reports.json
           if git diff --cached --quiet; then
             echo "Checked at $(date -u +%FT%TZ): reports unchanged." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -47,3 +54,24 @@ jobs:
             git push origin HEAD:main
             { echo "Published reports at $(date -u +%FT%TZ):"; echo '```'; git show --shortstat --format='%h %s' HEAD; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Verify Pages report index and every report file
+        id: publication
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py --verify-series
+      - name: Publish verification evidence
+        run: |
+          git add data/derivatives/check-series-reports.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: record report publication verification'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Publish verification receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py
+      - name: Fail explicitly when generation or publication failed
+        if: steps.series.outcome == 'failure' || steps.publication.outcome == 'failure'
+        run: exit 1
