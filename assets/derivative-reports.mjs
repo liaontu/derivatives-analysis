@@ -28,7 +28,7 @@ export function renderDerivativeReport(r,{table,tr,metric}){
     esc(panel(name).date||'—'),n(x.longOi),n(x.shortOi),signed(x.netOi),signed(x.changes?.netOi)+'<small>基準 '+esc(panel(name).baseDate||'缺資料')+'</small>'])));
   const futures=panel('futures');
   const large=['futures-large','options-large'].flatMap(name=>panel(name).rows.map(x=>tr([
-    esc(x.name||name)+' '+cp(x.cp),esc(panel(name).date||'—'),n(x.top5Buy),n(x.top5Sell),n(x.longShare,2)+'%／'+n(x.shortShare,2)+'%'])));
+    esc(x.name||name)+' '+cp(x.cp),esc(panel(name).date||'—'),n(x.top5Buy),n(x.top5Sell),n(x.longShare,2)+'%／'+n(x.shortShare,2)+'%',signed(x.changes?.longShare,2)+'／'+signed(x.changes?.shortShare,2)+'<small>基準 '+esc(panel(name).baseDate||'缺資料')+'</small>'])));
   const us=panel('us-options'),cot=panel('us-cot-financial'),cfe=panel('us-futures');
   const eventHeaders=['規則／權別','可評估／觸發','有效訊號日','報酬中位數','正報酬比例','平均報酬','平均減 1／3 點','排除／待觀察','判定'];
   const s=r.stockOptions,e=r.events;
@@ -46,7 +46,7 @@ export function renderDerivativeReport(r,{table,tr,metric}){
       <p>本期開始前的基準日 ${esc(r.baseDate)}；缺日留白。跨到期日的 P/C 變化不能全部視為新開倉。</p></section>
     <section class="panel"><h2>期貨價量與大額集中度</h2><p>期貨行情資料日 ${esc(futures.date||'尚未收錄本期')}；基準日 ${esc(futures.baseDate||'缺資料')}。各商品取最近有成交月份，同契約比較，沒有連續換月報酬。</p>
       ${table(['契約／月份','最後成交','結算價','來源日漲跌','成交量','未平倉','價格／未平倉變化'],futures.rows.map(x=>tr([esc(x.contract)+'／'+esc(x.month),n(x.last,2),n(x.price,2),pct(x.changePct),n(x.volume),n(x.oi),signed(x.changes?.last,2)+'／'+signed(x.changes?.oi)])))}
-      <details><summary>大額交易人（所有月份）</summary>${table(['商品','資料日','前五大多方','前五大空方','各占未平倉'],large)}<p>台指使用交易所換算口徑，不與大台法人直接相減；多空排行可能不是同一批人。</p></details></section>
+      <details><summary>大額交易人（所有月份）</summary>${table(['商品','資料日','前五大多方','前五大空方','各占未平倉','多／空占比變化（百分點）'],large)}<p>台指使用交易所換算口徑，不與大台法人直接相減；多空排行可能不是同一批人。</p></details></section>
     <section class="panel"><h2>履約價部位集中</h2><p>資料日 ${esc(r.strikes.date||'無')}；${esc(r.strikes.scope)}。</p>${table(['到期別','權別','履約價','未平倉','較 '+r.strikes.baseDate+' 變化'],r.strikes.rows.map(x=>tr([esc(x.month),cp(x.cp),n(x.strike),n(x.oi),signed(x.change)])))}<p>只對同一到期別及履約價比較；部位集中不是已確認的支撐或壓力。</p></section>
     <section class="panel"><h2>美國市場觀察</h2><p>Cboe 日期 ${esc(us.date||'無')}；CFTC 部位日期 ${esc(cot.date||'無')}（週資料）。${cot.date&&cot.date<r.periodStart?'本期尚無新版週資料；沿用不代表當日部位沒有變化。':''}</p>
       ${table(['Cboe 類別','成交量','成交 P/C（倍）','未平倉 P/C（倍）'],us.rows.map(x=>tr([esc(x.contract),n(x.totalVolume),n(x.volumeRatio,3),n(x.oiRatio,3)])))}

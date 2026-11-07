@@ -73,8 +73,8 @@
     },
     {
       "path": "assets/derivative-reports.mjs",
-      "bytes": 13659,
-      "sha256": "7ca51da902d159e5a54cb00e4327739d12dfcbdcfae3d50368372b0670f4ee12"
+      "bytes": 13834,
+      "sha256": "1a6903b6b6fe5f9d2f664e5caa008e1afd489bc930b1d7efad47126d4f58668d"
     },
     {
       "path": "assets/directory.mjs",
@@ -223,8 +223,8 @@
     },
     {
       "path": "automation/derivatives/derivative_reports.py",
-      "bytes": 32530,
-      "sha256": "5aca7f9aba918f45f1847c01fe8200f1aa5bcb2cb7000eac5d5c6909743df370"
+      "bytes": 34984,
+      "sha256": "dd1a32fe2fd0ae40d8aa7d9fccaf4eea1edb659d6bc427c09bd1d4cc437b99c4"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",

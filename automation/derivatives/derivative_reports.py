@@ -108,10 +108,31 @@ def project(name, rows):
     return rows
 
 
+def import_position_archives(output, obs):
+    """Reuse the site's validated daily reports, without querying an upstream again."""
+    for path in sorted((output/'daily-reports/positioning').glob('????-??-??.json')):
+        report = read(path, {})
+        day = report.get('date')
+        if day != path.stem:
+            raise ValueError('Archived positioning date mismatch: '+path.name)
+        sources = {s['id']: s for s in report.get('sources', []) if s.get('date') == day}
+        for prefix, contract in [('futures','TX'),('options','TXO')]:
+            name = prefix+'-large'
+            if name not in sources:
+                continue
+            rows = [{'date':day, 'contract':contract, 'month':'999912', 'traderType':'0',
+                     **{k:v for k,v in row.items() if k != 'product'}}
+                    for row in report.get('large', []) if row.get('product') == prefix]
+            if rows:
+                obs['feeds'].setdefault(name, {})[day] = {'rows':rows, 'url':sources[name].get('url'),
+                    'sha256':digest(rows), 'basis':'已核對同日來源的封存籌碼日報'}
+
+
 def capture(output):
     """Preserve compact histories, including quote feeds whose collector has no history."""
     path = output / ROOT / 'observations.json'
     obs = read(path, {'feeds': {}})
+    import_position_archives(output, obs)
     manifest = read(output/'manifest.json', {})
     sources = {s['id']: s for s in manifest.get('sources', [])}
     issues = {}
@@ -299,8 +320,10 @@ def build(output, obs, issues, kind, start, end):
             rows = compared_rows(rows, old, ['symbol', 'expiry'], ['price'])
             rows = sorted((r for r in rows if r.get('expiry', '') > (through or end)), key=lambda r: (r['expiry'], r['symbol']))[:3]
         elif name.endswith('large'):
-            rows = [{**r, 'longShare': round(r['top5Buy']/r['oi']*100, 4) if numeric(r.get('oi')) and r['oi'] > 0 and numeric(r.get('top5Buy')) else None,
-                     'shortShare': round(r['top5Sell']/r['oi']*100, 4) if numeric(r.get('oi')) and r['oi'] > 0 and numeric(r.get('top5Sell')) else None} for r in rows]
+            def shares(records):
+                return [{**r, 'longShare': round(r['top5Buy']/r['oi']*100, 4) if numeric(r.get('oi')) and r['oi'] > 0 and numeric(r.get('top5Buy')) else None,
+                         'shortShare': round(r['top5Sell']/r['oi']*100, 4) if numeric(r.get('oi')) and r['oi'] > 0 and numeric(r.get('top5Sell')) else None} for r in records]
+            rows = compared_rows(shares(rows), shares(old), ['contract','cp'], ['top5Buy','top5Sell','longShare','shortShare'])
         is_us = name.startswith('us-')
         missing = [] if is_us else [d for d in expected if d not in obs['feeds'].get(name, {})]
         us_old = is_us and through and (date.fromisoformat(end)-date.fromisoformat(through)).days > (14 if name == 'us-cot-financial' else 4)
@@ -383,7 +406,7 @@ def findings(report):
 def html_document(report):
     """Portable report with full evidence; also useful without application JavaScript."""
     def table(headers, rows):
-        return '<div class="table"><table><thead><tr>'+''.join('<th>'+escape(str(x))+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join('<td>'+escape(str(x))+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
+        return '<div class="table"><table><thead><tr>'+''.join('<th>'+escape(str(x))+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join('<td>'+escape('—' if x is None else str(x))+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
     parts = [f'<h1>{escape(report["title"])}</h1><p>{report["periodStart"]}～{report["periodEnd"]} · {escape(report["status"])} · 保存 {escape(report["generatedAt"])}</p>',
              '<p>資料日期各自列示；本報告為盤後研究，無自動交易或策略改版。</p>']
     for f in report['findings']:
@@ -392,26 +415,34 @@ def html_document(report):
         [[r['date']]+[number(r[k]) for k in ('foreignNetOi','trustNetOi','volume','volumeRatio','oiRatio')] for r in report['timeline']]))
     for name, label in [('futures-institutional','大台法人部位'),('options-institutional','臺指選擇權法人部位')]:
         p = report['panels'][name]
-        parts.append('<h2>'+label+'</h2><p>資料日 '+escape(str(p['date']))+'；基準 '+escape(str(p['baseDate']))+'</p>'+table(
+        parts.append('<h2>'+label+'</h2><p>資料日 '+escape(p['date'] or '尚無資料')+'；基準 '+escape(p['baseDate'] or '缺資料')+'</p>'+table(
             ['法人','買／賣權','多方','空方','淨部位','較基準變化'],
             [[r['investor'],r['cp'] or '—']+[number(r.get(k)) for k in ['longOi','shortOi','netOi']]+[number(r['changes']['netOi'])] for r in p['rows']]))
     parts.append('<h2>期貨行情</h2>'+table(['契約／月份','最後成交','結算價','來源日漲跌%','成交量','未平倉'],
         [[r['contract']+'/'+r['month']]+[number(r.get(k)) for k in ['last','price','changePct','volume','oi']] for r in report['panels']['futures']['rows']]))
+    parts.append('<h2>大額交易人集中度</h2>'+table(['商品／權別','資料日','前五大多方','前五大空方','多方占比%','空方占比%','多方占比變化（點）','空方占比變化（點）'],
+        [[r['name']+' '+str(r['cp'] or ''),report['panels'][name]['date']]+[number(r[k]) for k in ['top5Buy','top5Sell','longShare','shortShare']]+[number(r['changes'][k]) for k in ['longShare','shortShare']]
+         for name in ['futures-large','options-large'] for r in report['panels'][name]['rows']]))
     parts.append('<h2>履約價集中</h2>'+table(['到期別','權別','履約價','未平倉','同契約變化'],
         [[r['month'],r['cp']]+[number(r[k]) for k in ['strike','oi','change']] for r in report['strikes']['rows']]))
     parts.append('<h2>美國市場</h2>'+table(['Cboe 類別','成交量','成交 P/C 倍','未平倉 P/C 倍'],
         [[r['contract']]+[number(r[k]) for k in ['totalVolume','volumeRatio','oiRatio']] for r in report['panels']['us-options']['rows']]))
     parts.append(table(['CFTC 期貨','參與者','淨部位','較基準變化'],
         [[r['shortName'],c['category'],number(c['net']),number(c['netChange'])] for r in report['panels']['us-cot-financial']['rows'] for c in r['categories'] if c['category'] in ['assetManager','leveraged']]))
-    parts.append('<h2>固定訊號檢查</h2>'+table(['規則','權別','可評估／觸發','有效日期','中位數%','正報酬%','平均%','平均減1點','平均減3點','缺漏／未到期'],
-        [[r['label'],r['cp'],f"{r['evaluated']}/{r['signals']}",r['distinctSignalDates']]+[number(r[k]) for k in ['median','positivePct','mean','meanCost1','meanCost3']]+[encoded(r['counts'])]
-         for r in (report['events']['review'] or report['events']['period'])]))
+    parts.append(table(['CFE 契約','到期日','結算價','同契約變化'],
+        [[r['symbol'],r['expiry'],number(r['price']),number(r['changes']['price'])] for r in report['panels']['us-futures']['rows']]))
+    for key, label in [('period','固定訊號檢查'),('review','近 90 日策略檢討')]:
+        if report['events'][key]:
+            parts.append('<h2>'+label+'</h2>'+table(['規則','權別','可評估／觸發','有效日期','中位數%','正報酬%','平均%','平均減1點','平均減3點','缺漏／未到期'],
+                [[r['label'],r['cp'],f"{r['evaluated']}/{r['signals']}",r['distinctSignalDates']]+[number(r[k]) for k in ['median','positivePct','mean','meanCost1','meanCost3']]+[encoded(r['counts'])]
+                 for r in report['events'][key]]))
     parts.append('<h2>資料覆蓋與證據</h2>'+table(['來源','資料日','比較日','已收錄／預期日數','狀態','缺日期','SHA-256'],
         [[s['label'],s['date'],s['baseDate'],str(s['days'])+'/'+str(s['expected']),s['status'],','.join(s['missingDates']),s['sha256']] for s in report['sources']]))
     parts.append('<h2>下一期觀察清單</h2>'+table(['訊號日','到期別','權別','履約價','規則','均量倍數','漲跌%','增減倉'],
         [[r['date'],r['month'],r['cp'],number(r['strike']),RULE_LABELS[r['rule']]]+[number(r[k]) for k in ['volumeMultiple','pricePct','oiChange']] for r in report['events']['watch']]))
     parts.append('<p>完整結構化數據：<a href="'+escape(report['id'])+'.json">下載 JSON</a>；報告內容雜湊 <code>'+report['contentHash']+'</code></p>')
     parts.append('<h2>方法與限制</h2><ul>'+''.join('<li>'+escape(x)+'</li>' for x in report['limitations'])+'</ul>')
+    parts.append('<h2>官方來源連結</h2><ul>'+''.join('<li><a href="'+escape(s['url'], quote=True)+'">'+escape(s['label'])+'</a></li>' for s in report['sources'] if str(s.get('url') or '').startswith('https://'))+'</ul>')
     return '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(report['title'])+'</title><style>body{max-width:1100px;margin:24px auto;padding:0 16px;font:16px/1.6 system-ui;color:#14252e}h1{font-size:26px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}.table{overflow:auto}code{overflow-wrap:anywhere}@media print{table{font-size:10px}.table{overflow:visible}h2{break-after:avoid}tr{break-inside:avoid}}</style>'+''.join(parts)+'</html>'
 
 
