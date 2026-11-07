@@ -243,8 +243,8 @@
     },
     {
       "path": "automation/derivatives/fcm_monthly.py",
-      "bytes": 6075,
-      "sha256": "d81823e396cce3d87a6595e0d34d789fa014567eb10a159fdba4707e9551a77b"
+      "bytes": 6240,
+      "sha256": "76f7576a9400d60515eea5194f337ffee078c6d001bf629d911769696505fda9"
     },
     {
       "path": "automation/derivatives/governance.py",

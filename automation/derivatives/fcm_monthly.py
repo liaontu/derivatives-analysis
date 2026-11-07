@@ -27,6 +27,8 @@ def parse(raw):
         if not re.fullmatch(r'\d{6}', month):
             raise ValueError('Invalid monthly date')
         month = date.fromisoformat(month[:4]+'-'+month[4:]+'-01').isoformat()[:7]
+        if any(not isinstance(r[k],str) or not r[k].strip() for k in ('FCMCode','FCMName','Contract')):
+            raise ValueError('Missing monthly FCM identity')
         code, name, contract = (str(r[k]).strip() for k in ('FCMCode','FCMName','Contract'))
         volume = str(r['Volume'])
         key = month, code, contract
