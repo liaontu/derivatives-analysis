@@ -13,23 +13,23 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 4797,
-      "sha256": "1bfd4566c7bf02a2444a97ca2c520030cac03264027c450a6e7c5adb940fb956"
+      "bytes": 4817,
+      "sha256": "f719575ffc12b5e47ba554cb7854ed4a994b47eabfb66b661106e60a3a6a7abf"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
-      "bytes": 3171,
-      "sha256": "42cf09cc9e130aa813574ef19cacfb4a19eb5136f34b926ec2baf1eb402b3f80"
+      "bytes": 3191,
+      "sha256": "33783d9f73895c9dc1c5e703f3af6cff29f039ed58263cdf907606ecdd8af19d"
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
-      "bytes": 5334,
-      "sha256": "114ed50785702a428db6ce925ec9144e6ea9dc157bbaff1c9283ab80c0bed4bd"
+      "bytes": 5354,
+      "sha256": "ce5622490a940457195a557ce63585f3b72d79f3cf556ab4258a20505b6dec98"
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
-      "bytes": 1426,
-      "sha256": "bdf9875aa487925c4260ed38243d44eb7b7a0abea7116aaa00cc0d15acf20c7a"
+      "bytes": 1446,
+      "sha256": "76ca882715112426c6154d67f114e7e05a8d30a4feb04aec55c1b575e68ccc30"
     },
     {
       "path": ".gitignore",
@@ -108,8 +108,8 @@
     },
     {
       "path": "assets/pipeline-health.mjs",
-      "bytes": 2608,
-      "sha256": "55e359fe6122d748110fc5af5970b49ea9a1a99cfe510db8a521630f818b3683"
+      "bytes": 2703,
+      "sha256": "8c1dc802632d880f433794dd7ae9487ec570a7f68a7f8cc04e3db20de234bf43"
     },
     {
       "path": "assets/series-reports.mjs",
@@ -183,8 +183,8 @@
     },
     {
       "path": "automation/derivatives/check_status.py",
-      "bytes": 4958,
-      "sha256": "05fe7634407c916f55213c1c6f264044355ffe9a55bba7b6ce25fa9c6907c734"
+      "bytes": 5200,
+      "sha256": "3a466f6b5ffa87be21686083b73d551a1395f86378fbcde6abafe5e170da7520"
     },
     {
       "path": "automation/derivatives/cloud_recovery.py",
@@ -203,8 +203,8 @@
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
-      "bytes": 5199,
-      "sha256": "d4a5db38938de6bd18375c519952a0fb172115e67fbe7411ce2a3542eab52c81"
+      "bytes": 6485,
+      "sha256": "f278d435d1f8095d1ce06882d08cfc85cb5f6d40c46b2e1f9ebbe40302de4daa"
     },
     {
       "path": "automation/derivatives/governance.py",

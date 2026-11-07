@@ -8,6 +8,7 @@ permissions:
   actions: read
   contents: write
   pages: write
+  deployments: read
 concurrency:
   group: derivatives-daily
   cancel-in-progress: false

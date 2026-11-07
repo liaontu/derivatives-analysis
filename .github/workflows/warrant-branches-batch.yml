@@ -19,6 +19,7 @@ permissions:
   actions: read
   contents: write
   pages: write
+  deployments: read
 jobs:
   update:
     runs-on: ubuntu-latest

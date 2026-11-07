@@ -61,6 +61,9 @@ def record(output, kind, outcomes, run_id, now=None):
         data_date = data.get('asOf') or data.get('latest') or data.get('end') or data.get('lastMarketDate') or data.get('date') or (dates[-1] if dates else None)
         if data_date is not None and not isinstance(data_date, str):
             data_date = max((r.get('dataThrough') or '' for r in data.get('items', [])), default='') or None
+        if key == 'lab_reports' and data.get('latest'):
+            item = next((r for r in data.get('items', []) if r.get('id') == data['latest']), {})
+            data_date = item.get('date')+'（報告日）' if item.get('date') else None
         modules[key] = {'outcome': outcome, 'status': status, 'checkedAt': now,
                         'lastSuccessAt': now if good else previous.get('lastSuccessAt'),
                         'dataDate': data_date,

@@ -27,10 +27,26 @@ def needs_build(build, head, now):
 
 def ensure(repository, head, api, now):
     latest = api(f'repos/{repository}/pages/builds/latest', 'GET')
+    if latest and latest.get('commit') == head and latest.get('status') == 'errored' and successful_deployment(repository, head, api):
+        return f'Pages deployment already succeeded for {head}; legacy build status differs, no duplicate build requested.'
     if needs_build(latest, head, now):
         api(f'repos/{repository}/pages/builds', 'POST')
         return f'Pages build requested for {head}; includes recovery after a prior failed or interrupted deployment.'
     return f'Pages already built or building {head}; no duplicate build requested.'
+
+
+def successful_deployment(repository, head, api):
+    """Pages' legacy build endpoint can report a cancelled duplicate as errored."""
+    deployments = api(f'repos/{repository}/deployments?environment=github-pages&sha={head}&per_page=5', 'GET')
+    if not isinstance(deployments, list):
+        return None
+    for deployment in deployments:
+        if deployment.get('sha') != head or deployment.get('environment') != 'github-pages':
+            continue
+        statuses = api(f"repos/{repository}/deployments/{deployment['id']}/statuses", 'GET')
+        if statuses and statuses[0].get('state') == 'success':
+            return {'id': deployment['id'], 'commit': head, 'status': 'built', 'basis': 'github-pages deployment API'}
+    return None
 
 
 def gh_api(endpoint, method):
@@ -71,6 +87,8 @@ def verify_series(root, repository, head, api=gh_api, fetch=None, attempts=20, s
         last_error = 'Pages build has not completed for the target commit'
         for attempt in range(attempts):
             build = api(f'repos/{repository}/pages/builds/latest', 'GET') or {}
+            if build.get('status') == 'errored' and build.get('commit') == head:
+                build = successful_deployment(repository, head, api) or build
             if build.get('status') == 'built' and build.get('commit') == head:
                 verified = []
                 try:
@@ -79,7 +97,8 @@ def verify_series(root, repository, head, api=gh_api, fetch=None, attempts=20, s
                         if actual != digest:
                             raise ValueError('Published SHA-256 mismatch: '+file)
                         verified.append(file)
-                    proof.update(status='verified', verifiedFiles=verified, buildCommit=build['commit'])
+                    proof.update(status='verified', verifiedFiles=verified, buildCommit=build['commit'],
+                                 verificationBasis=build.get('basis','Pages build API'), deploymentId=build.get('id'))
                     break
                 except Exception as exc:
                     last_error = str(exc)
