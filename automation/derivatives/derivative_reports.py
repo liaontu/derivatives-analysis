@@ -159,6 +159,26 @@ def capture(output):
                 'rows': selected, 'url': source.get('url'), 'sha256': digest(selected),
                 'basis': '已保存官方逐日資料；非當日即時訊號',
             }
+    # Validated full-market shards supersede the older top-contract reconstruction.
+    history_index = read(output/'market-history.json', {})
+    if history_index:
+        if __package__:
+            from .market_history import load_day
+        else:
+            from market_history import load_day
+        for name in FEEDS:
+            for day, entry in history_index.get('feeds', {}).get(name, {}).items():
+                current = obs['feeds'].get(name, {}).get(day, {})
+                if current.get('archiveSha256') == entry['sha256']:
+                    continue
+                document = load_day(output, entry)
+                if document['date'] != day or document['feed'] != name or any(r['date'] != day for r in document['rows']):
+                    raise ValueError('Historical archive identity mismatch')
+                selected = project(name, document['rows'])
+                if selected:
+                    obs['feeds'].setdefault(name, {})[day] = {'rows':selected, 'sha256':digest(selected),
+                        'url':entry.get('evidence',{}).get('url'), 'archiveSha256':entry['sha256'],
+                        'basis':'已驗證完整歷史報表的欄位投影；事後重建'}
     save(path, obs)
     return obs, issues
 
@@ -364,6 +384,20 @@ def build(output, obs, issues, kind, start, end):
                         'missingDates':missing, 'status':'unavailable' if not through or summary.get('sourceStatus') == 'unavailable' else 'partial' if missing else 'available',
                         'note':'配對缺報價另列；無報價不補零', 'sha256':digest(summary), 'url':'https://www.taifex.com.tw/cht/3/optDailyMarketReport'})
     report['status'] = 'partial' if any(s['status'] != 'available' for s in sources) else 'available'
+    history = read(output/'market-history.json', {})
+    for name in ('futures-fcm','options-fcm'):
+        if not history: continue
+        entries = history.get('feeds', {}).get(name, {})
+        dates = [d for d in expected if d in entries]
+        missing = [d for d in expected if d not in entries]
+        sources.append({'id':name,'label':'期貨商成交量全表－'+('期貨' if name.startswith('futures') else '選擇權'),
+                        'date':max(dates) if dates else None,'baseDate':base if base in entries else None,
+                        'days':len(dates),'expected':len(expected),'missingDates':missing,
+                        'status':'partial' if missing else 'available',
+                        'note':'交易熱度，不代表方向；免費較早全表未保存的日期不補值',
+                        'url':'https://www.taifex.com.tw/cht/7/dailyFCM',
+                        'sha256':digest({d:entries[d]['sha256'] for d in dates})})
+    report['status'] = 'partial' if any(s['status'] != 'available' for s in sources) else 'available'
     report['findings'] = findings(report)
     return report
 
@@ -495,6 +529,17 @@ def run(output, kind, today, now=None):
         save(index_path, index)
         return [], [str(exc)]
     results, failures = [], []
+    if kind == 'daily':
+        changed = read(output/'market-history.json', {}).get('changedDates', [])
+        calendar = load_calendar(output)
+        for item in previous_index.get('items', []):
+            if item.get('archiveState') != 'current': continue
+            baseline = prior_open(calendar, item['periodStart'])
+            if any(baseline <= d <= item['periodEnd'] for d in changed):
+                try:
+                    archive(output, build(output, obs, issues, item['kind'], item['periodStart'], item['periodEnd']), now)
+                except Exception as exc:
+                    failures.append(item['id']+': '+str(exc))
     for selected in kinds:
         try:
             if selected == 'daily':
@@ -529,7 +574,23 @@ def main():
     parser.add_argument('--data', type=Path, default=Path('data/derivatives'))
     parser.add_argument('--kind', choices=['daily','weekly','monthly','auto','all','both'], default='daily')
     parser.add_argument('--today', type=date.fromisoformat, default=datetime.now(timezone(timedelta(hours=8))).date())
+    parser.add_argument('--rebuild-from', type=date.fromisoformat)
     args = parser.parse_args()
+    if args.rebuild_from:
+        obs, issues = capture(args.data)
+        calendar = load_calendar(args.data)
+        end = min(args.today.isoformat(), max(obs['feeds'].get('futures', {})))
+        now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+        for day in open_days(calendar, args.rebuild_from.isoformat(), end):
+            archive(args.data, build(args.data, obs, issues, 'daily', day, day), now)
+        cursor = args.rebuild_from
+        while cursor.isoformat() <= end:
+            if cursor.weekday() == 4:
+                archive(args.data, build(args.data, obs, issues, 'weekly', (cursor-timedelta(days=4)).isoformat(), cursor.isoformat()), now)
+            tomorrow = cursor+timedelta(days=1)
+            if tomorrow.month != cursor.month:
+                archive(args.data, build(args.data, obs, issues, 'monthly', cursor.replace(day=1).isoformat(), cursor.isoformat()), now)
+            cursor = tomorrow
     results, failures = run(args.data, args.kind, args.today)
     print(json.dumps({'reports': results, 'failures': failures}, ensure_ascii=False))
     if failures:

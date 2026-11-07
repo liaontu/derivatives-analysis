@@ -80,7 +80,7 @@ export function createStockOptions({load, table, tr, select, metric}) {
       ${select('so-view','觀察用途',['activity','parity'],state.view,v=>v==='activity'?'成交與未平倉':'兩邊成交價差')}
       ${select('so-sort','排序',['volume','oi'],state.sort,v=>v==='volume'?'成交量優先':'未平倉優先')}
       <label><input type="checkbox" id="so-all" ${state.all ? 'checked' : ''}>包含零成交／缺值契約</label></div>
-      <p class="coverage">全市場 ${esc(day)} · ${fmt(symbols.length)} 檔標的、${fmt(marketPairs.length)} 組契約；${fmt(marketPriced)} 組可算收盤價差，${fmt(marketQuoted)} 組有至少一個方向的三邊盤末報價。</p>
+      <p class="notice">${esc(now.roster?.historicalScope||index.historicalScope||"名錄與報價依各日保存內容")}</p><p class="coverage">全市場 ${esc(day)} · ${fmt(symbols.length)} 檔標的、${fmt(marketPairs.length)} 組契約；${fmt(marketPriced)} 組可算收盤價差，${fmt(marketQuoted)} 組有至少一個方向的三邊盤末報價。</p>
       <div class="metrics">${metric('現股收盤（元）',fmt(spot,2),stock.name + ' · ' + day)}
       ${metric('現股變動（元）',signed(difference(spot,prior?.code === stock.code ? prior.spot : null)),before ? '與 ' + before + ' 比較' : '等待前一收錄日')}
       ${metric('可算成交價差',fmt(observed.length) + '／' + fmt(rows.length),'當日兩邊均成交且有同日現股價')}

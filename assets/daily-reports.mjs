@@ -137,8 +137,9 @@ export function createReports({load,table,tr,select,metric}) {
       const first=strikeRanking(report.strikes,state.month,side).known[0];
       return optionSide(side)+(first?.total>0 ? '最高為 '+fmt(first.strike)+' 點（'+fmt(first.total)+' 口）' : '尚無可排名資料');
     });
+    const incomplete=report.coverage?.missingSources?.length?'<p class="notice warning">本日缺少期貨商完整成交量表：'+esc(report.coverage.missingSources.join('、'))+'；不以摘要或前日數字補值。</p>':'';
     const channels=['futures','options'].map(k=>`<div><h3>${types[k]}交易通路前五</h3>${table(['期貨商','成交量（口）'],report.brokers[k].map(r=>tr([esc(r.name),fmt(r.volume)])))}</div>`);
-    return `<section class="panel"><div class="metrics">${metric('臺指成交量 P/C',pct(p.volumeRatio),'變動 '+signed(dv,' 個百分點'))}
+    return `${incomplete}<section class="panel"><div class="metrics">${metric('臺指成交量 P/C',pct(p.volumeRatio),'變動 '+signed(dv,' 個百分點'))}
       ${metric('臺指未平倉 P/C',pct(p.oiRatio),'變動 '+signed(doi,' 個百分點'))}
       ${metric('兩種 P/C 變化',sync,'比較前一收錄行情日')}</div>
       <p>成交量：賣權 ${fmt(p.putVolume)} 口／買權 ${fmt(p.callVolume)} 口。未平倉：賣權 ${fmt(p.putOi)} 口／買權 ${fmt(p.callOi)} 口。</p>

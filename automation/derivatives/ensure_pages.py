@@ -75,6 +75,17 @@ def expected_series(root):
             if not report_id or not all(c.isalnum() or c in '-_' for c in report_id):
                 raise ValueError('Unsafe derivative report identifier')
             paths.extend(f'data/derivatives/derivative-reports/{report_id}.{ext}' for ext in ('json', 'html'))
+    history = root / 'data/derivatives/market-history.json'
+    if history.exists():
+        paths.append('data/derivatives/market-history.json')
+        for feed, entries in json.loads(history.read_bytes()).get('feeds', {}).items():
+            if not entries: continue
+            for day in sorted({min(entries), max(entries)}):
+                entry = entries[day]
+                relative = Path(entry['path'])
+                if relative.is_absolute() or '..' in relative.parts or relative.parts[0] != 'market-history':
+                    raise ValueError('Unsafe history archive path')
+                paths.append('data/derivatives/'+entry['path'])
     return {p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in paths}
 
 

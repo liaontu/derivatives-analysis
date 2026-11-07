@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 *.tmp
 *.json.gz
+!data/derivatives/market-history/**/*.json.gz
 !data/derivatives/research-inputs/**/*.json.gz
 !data/derivatives/stock-institutional-sources/**/*.json.gz

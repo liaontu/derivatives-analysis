@@ -147,6 +147,10 @@ def position_report(output, manifest):
         if feed.get('date') != day:
             raise ValueError('來源行情檔與資料清單日期不同')
         feeds[name] = [r for r in feed['rows'] if r.get('date') == day]
+    return build_position_report(day, sources, feeds)
+
+
+def build_position_report(day, sources, feeds):
     institutions, large, brokers = [], [], {}
     for prefix, label, symbol in [('futures','臺股期貨','TX'), ('options','臺指選擇權','TXO')]:
         institutions.extend({'product': prefix, **{k:r[k] for k in ('investor','cp','longOi','shortOi','netOi')}}
@@ -177,6 +181,11 @@ REPORTS = {'warrant-volume': warrant_report, 'positioning': position_report}
 
 def archive(output, kind, report):
     folder = output / 'daily-reports' / kind
+    previous = folder / (report['date'] + '.json')
+    if kind == 'positioning' and previous.exists() and read(previous) != report:
+        from hashlib import sha256
+        original = previous.read_bytes()
+        save_text(folder / 'revisions' / (report['date']+'-'+sha256(original).hexdigest()[:12]+'.json'), original.decode('utf8'))
     save(folder / (report['date'] + '.json'), report)
     days = sorted(p.stem for p in folder.glob('????-??-??.json'))
     save(folder / 'index.json', {'dates': days, 'status':'ok'})
