@@ -1,0 +1,115 @@
+{
+  "episode": "stock-warrant-2026-11-06",
+  "dataDate": "2026-11-06",
+  "producedOn": "2026-11-08",
+  "durationSeconds": 475.0,
+  "cardCount": 12,
+  "automaticPublishing": false,
+  "files": [
+    {
+      "path": "captions.srt",
+      "bytes": 9500,
+      "sha256": "d54a4a39c53620405c90e2c8183e0a25e85d9e313a7de2ee6d41822432085d7c"
+    },
+    {
+      "path": "captions.vtt",
+      "bytes": 9508,
+      "sha256": "f5a81048c3326c9a7645be41e07505582a856fa9cb944416ba81e14bf71484b8"
+    },
+    {
+      "path": "card-01.png",
+      "bytes": 155526,
+      "sha256": "4cd62bf9b01370bff2f35b01c026b74524f722956228401d1b693ddf34ec0656"
+    },
+    {
+      "path": "card-02.png",
+      "bytes": 123661,
+      "sha256": "ab0ba29e2915a55fec5c439bfd4774a25c46dd032ac80e94f76201142e729019"
+    },
+    {
+      "path": "card-03.png",
+      "bytes": 130170,
+      "sha256": "620abb4d38702e60817ab2b635574eb6a4d47bf802e936b6c134fa8c63ddb1df"
+    },
+    {
+      "path": "card-04.png",
+      "bytes": 130490,
+      "sha256": "2bde8b311489d7bc57be58d1ba78b404027ede71ab2aee7c35fb5866e69c8772"
+    },
+    {
+      "path": "card-05.png",
+      "bytes": 145018,
+      "sha256": "793b51cdb209d0cda94062667c97077abe2cb90d76bd3cb3afaf38f9f4046661"
+    },
+    {
+      "path": "card-06.png",
+      "bytes": 139160,
+      "sha256": "70e9e82753d9a3d34b4c78cb835a5b27ff0d4683b5e72ae8141f9b93fa7dbb76"
+    },
+    {
+      "path": "card-07.png",
+      "bytes": 152257,
+      "sha256": "27b703bd224dc56d919427f757f738221bc0b99fd2977f4811e60ca1a85d4b78"
+    },
+    {
+      "path": "card-08.png",
+      "bytes": 137704,
+      "sha256": "7eff1e87aa7b068b1008318ad4cf95f98b11314869cc5061eb6a81427d8ce349"
+    },
+    {
+      "path": "card-09.png",
+      "bytes": 161390,
+      "sha256": "84f3299675e7ddde1c3420b7315dff44c036f13ae02a9487c86bf23bf1c15a99"
+    },
+    {
+      "path": "card-10.png",
+      "bytes": 147984,
+      "sha256": "610c9ece73609001df9fa3fd193fe212667cbd4028ec2b45983b606c67ac3010"
+    },
+    {
+      "path": "card-11.png",
+      "bytes": 191538,
+      "sha256": "e0bcd50fcf58bbc7809bf7e4810c1b9f65ef5af0f18b7540047240a809c48b7e"
+    },
+    {
+      "path": "card-12.png",
+      "bytes": 158438,
+      "sha256": "af37d07a0dbdd4d8abeec43f823c8c20d7accaa8fbd45474564dea314156061b"
+    },
+    {
+      "path": "cards.zip",
+      "bytes": 1653038,
+      "sha256": "54ed5dd61e116f81f06bbfd11cafc85ae5d0172d4d82c4dc53fc05dc924de1f6"
+    },
+    {
+      "path": "FONT-LICENSE.txt",
+      "bytes": 4387,
+      "sha256": "babcfe66c8a098b2fa279bc724a3a342f8124f77ce18941fbcc1bbb39823cded"
+    },
+    {
+      "path": "index.html",
+      "bytes": 10145,
+      "sha256": "dfc29664ea7159ea585ece3514286e6ce1b1f574a94c24a9864b58ea0f27afbf"
+    },
+    {
+      "path": "video-cover.jpg",
+      "bytes": 133810,
+      "sha256": "51f1d6a764fcacb69c2d61bc6ea89a64c182c723697009be59a26f94276551bf"
+    },
+    {
+      "path": "video.mp4",
+      "bytes": 31638039,
+      "sha256": "a1036d624b3445627a2c49ce715791d740702a58d230a1a832a7ac4e07065586"
+    },
+    {
+      "path": "旁白腳本.txt",
+      "bytes": 7188,
+      "sha256": "fb5df22c44b0b0d048e649da00297eb2606fc2e6f95afa55fdc004b3f360f133"
+    },
+    {
+      "path": "資料與方法.txt",
+      "bytes": 3534,
+      "sha256": "535c3dfc24e584ff5c00998b5fcb2a6a8c531d7446852d7e43bf204c813eb4a3"
+    }
+  ]
+}
