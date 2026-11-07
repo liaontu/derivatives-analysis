@@ -292,11 +292,20 @@ def backfill_stock(output,index,client,start,end,max_days=None):
     if __package__: from . import stock_options as stock
     else: import stock_options as stock
     target=read(output/'stock-option-watch.json',{})
-    missing=[d for d in expected_days(output,'options',start,end) if d not in target.get('dates',[]) and d in index['feeds'].get('options',{})]
+    missing=[d for d in expected_days(output,'options',start,end) if d in index['feeds'].get('options',{}) and
+             read(output/'stock-option-watch'/(d+'.json'),{}).get('optionsHash') != index['feeds']['options'][d]['sha256']]
     if not missing: return
-    contracts,roster=stock.fetch_contracts(output)
-    roster={**roster,'historicalScope':'以補抓時官方名錄回查，非歷史完整名錄，存在存活偏差'}
+    current_contracts,current_roster=None,None
     for day in missing[:max_days] if max_days is not None else missing:
+        previous=read(output/'stock-option-watch'/(day+'.json'),{})
+        if previous.get('stocks'):
+            contracts={symbol:(r['code'],r['name']) for symbol,r in previous['stocks'].items()}
+            roster=previous.get('roster') or {'url':stock.LIST_URL,'historicalScope':'沿用原觀察檔已保存名錄；未驗證歷史全市場名錄'}
+        else:
+            if current_contracts is None:
+                current_contracts,current_roster=stock.fetch_contracts(output)
+                current_roster={**current_roster,'historicalScope':'以補抓時官方名錄回查，非歷史完整名錄，存在存活偏差'}
+            contracts,roster=current_contracts,current_roster
         options=load_day(output,index['feeds']['options'][day])
         options['provenance']={'sha256':index['feeds']['options'][day]['sha256']}
         raw,evidence=client.get(stock.TWSE_DAILY+day.replace('-',''))
@@ -304,9 +313,11 @@ def backfill_stock(output,index,client,start,end,max_days=None):
         snapshot=stock.build(output,options,contracts,quotes)
         client.accept(evidence)
         snapshot.update(roster=roster,spotEvidence=evidence)
+        if previous:
+            save(output/'stock-option-watch/revisions'/(day+'-'+hashlib.sha256(encode(previous)).hexdigest()[:12]+'.json'),previous)
         save(output/'stock-option-watch'/(day+'.json'),snapshot)
         target['dates']=sorted(set(target.get('dates',[]))|{day}); target['latest']=target['dates'][-1]
-        target.update(status='ok',historicalScope=roster['historicalScope'])
+        target.update(status='ok',historicalScope='歷史名錄範圍依各日說明；目前名錄回查者存在存活偏差')
         index.setdefault('changedDates',[]).append(day)
         save(output/'stock-option-watch.json',target)
         print(json.dumps({'stock-options':day,'stocks':len(snapshot['stocks'])}),flush=True)
