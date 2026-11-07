@@ -28,7 +28,7 @@ HINTS = {'call-up': '上漲日認購連續買超', 'call-down': '下跌日認購
 RULES = {'version': VERSION, 'branchStreak': 3, 'rollSellDays': 30, 'rollBuyDays': 60,
          'minCorrelationPairs': 10, 'topWarrants': 5, 'branchLeadersPerSide': 3,
          'basis': '分點是交易通路，非單一大戶；成交量不是主動買進量；歷史重建不是當時可得訊號。',
-         'issuerBasis': '發行商由權證名稱判定；發行商總公司分點視為造市部位，其淨賣超反號當作市場淨買進的粗估，不列入策略線索；同券商其他分點另標示。'}
+         'issuerBasis': '發行商由權證名稱判定；發行商總公司分點依名稱比對推定為造市與避險部位（未取得造市專戶身分），不列入策略線索；其淨賣超反號只是有排行權證的市場淨買進粗估，不是全市場淨額；同券商其他分點另標示。'}
 # Issuers as they appear inside warrant names (e.g. 台積電永豐64購16), and the broker each ranked branch belongs to.
 ISSUERS = ('元大', '凱基', '群益', '永豐', '統一', '國票', '台新', '富邦', '國泰', '中信', '兆豐', '元富', '康和')
 ISSUER_PATTERN = re.compile('(' + '|'.join(ISSUERS) + r')[0-9A-Z]{2}[購售牛熊][0-9]{2}$')
@@ -37,7 +37,7 @@ BROKERS = {'元大': '元大', '元大證券': '元大', '凱基': '凱基', '�
            '台新': '台新', '台新證券': '台新', '富邦': '富邦', '富邦證券': '富邦', '國泰': '國泰', '國泰證券': '國泰',
            '中國信託': '中信', '中信': '中信', '兆豐': '兆豐', '兆豐證券': '兆豐', '元富': '元富', '元富證券': '元富',
            '康和': '康和', '康和證券': '康和'}
-RELATIONS = {'issuer': '發行商造市', 'sameBroker': '同券商分點', 'other': '其他分點', 'unknown': '發行商未判定'}
+RELATIONS = {'issuer': '發行商總公司（疑似造市）', 'sameBroker': '同券商分點', 'other': '其他分點', 'unknown': '發行商未判定'}
 
 
 def issuer_of(name):
@@ -47,7 +47,7 @@ def issuer_of(name):
 
 
 def branch_relation(branch_name, issuer):
-    """issuer: the warrant issuer's own head-office branch (market making); sameBroker: one of its retail branches."""
+    """issuer: the warrant issuer's own head-office branch (presumed market making by name matching); sameBroker: one of its retail branches."""
     if not issuer:
         return 'unknown'
     parts = re.split(r'[-－]', branch_name or '')
@@ -58,7 +58,7 @@ def branch_relation(branch_name, issuer):
 
 
 def market_making(branches):
-    """Per side, the issuers' own net flow; its negative is a rough estimate of the market's net buying."""
+    """Per side, the issuers' head-office net flow among ranked warrants; its negative is a rough estimate of those warrants' market net buying, not a market-wide figure."""
     out = {}
     for cp in ('C', 'P'):
         rows = [r for r in branches if r['cp'] == cp and r.get('relation') == 'issuer']
@@ -285,7 +285,7 @@ def finish(output, end, calendar):
                      '分點只有保留的買超／賣超排行，名單每日不同；跨日觀測總量不可當成大戶庫存。',
                      '相關係數採股價日變動與相同權證樣本成交量的對數日變動，最多一個月，沒有因果或策略有效性推定。',
                      '同分點的不同權證交易可能來自不同客戶，換倉／雙邊買超僅為需要後續確認的線索。',
-                     '發行商由權證名稱判定；發行商總公司分點的買賣超視為造市與避險部位，不列入策略線索，其淨賣超反號只是市場淨買進的粗估（排行不完整、造市也可能透過其他帳戶）。',
+                     '發行商由權證名稱判定；發行商總公司分點的買賣超依名稱比對推定為造市與避險部位（未取得造市專戶身分，造市也可能透過其他帳戶），不列入策略線索；其淨賣超反號只是有排行權證的市場淨買進粗估，未收錄的排行可能反向，不是全市場淨額。',
                      '同券商的其他分點可能是一般客戶，也可能與造市部位有關，線索中另標示供保留判讀。']}
     save(folder/'index.json',index)
     return index

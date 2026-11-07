@@ -148,8 +148,8 @@
     },
     {
       "path": "assets/warrant-relationship.mjs",
-      "bytes": 22179,
-      "sha256": "9545be5104fb73473cba178f733f8123171fa95ecc0ac6a505f002d42c46a2aa"
+      "bytes": 22724,
+      "sha256": "385a4a1e71d655e2ef6ce68f6e7a0ad80c8deb70756dad511b90f50df4627c09"
     },
     {
       "path": "assets/watch.mjs",
@@ -278,8 +278,8 @@
     },
     {
       "path": "automation/derivatives/warrant_relationship.py",
-      "bytes": 22999,
-      "sha256": "df41d8eeca86e585c188d04aa1b6c58fe2b4854c13d1ee55e48be2821f75a38b"
+      "bytes": 23313,
+      "sha256": "9d5584efeeaf28c6f0378fc2e3b0bd0c081b072b531476c3563fd0143993029c"
     },
     {
       "path": "automation/derivatives/warrant_series_reports.py",
