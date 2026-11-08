@@ -1,0 +1,28 @@
+{
+  "episodes": [
+    {
+      "slug": "cross-market-2026-11-06",
+      "title": "三市場觀察 EP.01｜現股、期貨、選擇權一起看",
+      "summary": "從價格、法人分歧與換月，讀懂選擇權 P/C；區分同期關係與隔日預測。",
+      "cover": "LandscapeCover.png",
+      "dataDate": "2026-11-06",
+      "producedOn": "2026-11-09",
+      "duration": "13:57",
+      "cards": 12,
+      "style": "清新文青版",
+      "highlights": 82.16666666666667
+    },
+    {
+      "slug": "stock-warrant-2026-11-06",
+      "title": "股證追蹤 EP.01｜台積電跌了，權證卻放量",
+      "summary": "從法人分歧、權證條件到歷史樣本，觀察同一天的不同訊號。",
+      "cover": "video-cover.jpg",
+      "dataDate": "2026-11-06",
+      "producedOn": "2026-11-08",
+      "duration": "7:55",
+      "cards": 12,
+      "style": "股證追蹤專題",
+      "highlights": null
+    }
+  ]
+}

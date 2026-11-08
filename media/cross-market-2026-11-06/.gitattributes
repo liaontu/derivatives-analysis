@@ -1,0 +1,6 @@
+*.txt -text -whitespace
+*.srt -text -whitespace
+*.vtt -text -whitespace
+*.zip binary
+*.mp4 binary
+*.mp3 binary

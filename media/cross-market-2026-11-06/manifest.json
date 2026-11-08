@@ -1,0 +1,189 @@
+{
+  "episode": "cross-market-2026-11-06",
+  "title": "三市場觀察 EP.01｜現股、期貨、選擇權一起看",
+  "summary": "從價格、法人分歧與換月，讀懂選擇權 P/C；區分同期關係與隔日預測。",
+  "cover": "LandscapeCover.png",
+  "styleLabel": "清新文青版",
+  "dataDate": "2026-11-06",
+  "periodStart": "2026-10-01",
+  "producedOn": "2026-11-09",
+  "durationSeconds": 836.7666666666667,
+  "highlightSeconds": 82.16666666666667,
+  "cardCount": 12,
+  "automaticPublishing": false,
+  "sourceReport": "period-2026-11-06-r14-fe674b3e355a",
+  "sourceHash": "fe44b2572769eccc0181119f1bbab72dcc38a871e833e690bd8cd53ea0a00964",
+  "visualStyle": "fresh-editorial-v2",
+  "files": [
+    {
+      "path": "captions.srt",
+      "bytes": 16418,
+      "sha256": "3de55d9cd8d69a060181306b8b74d5883f16a1e3505f7a92e9c625de5fcd7497"
+    },
+    {
+      "path": "captions.vtt",
+      "bytes": 16428,
+      "sha256": "169a595511d2e2a4258290f9be4bf787475e5554343dcaa4a3f07e9f71c7d39b"
+    },
+    {
+      "path": "card-01.png",
+      "bytes": 154695,
+      "sha256": "10ec0cac2196d57c79c44f657d4023db0d938ac0a40b789706031e0a5a17b5ae"
+    },
+    {
+      "path": "card-02.png",
+      "bytes": 145355,
+      "sha256": "24e4085d60a3fdcbb5a267b330f4e651916043b04d20eacc081da6aaee18c379"
+    },
+    {
+      "path": "card-03.png",
+      "bytes": 147771,
+      "sha256": "20062f62827c3a39488cc9dac29271578c19c3365b4e2e1ec1d6636be3ae4a37"
+    },
+    {
+      "path": "card-04.png",
+      "bytes": 138497,
+      "sha256": "b33e415048d203d780ee0548f131ab2cf0474bf016093b9792cfbb501bf29806"
+    },
+    {
+      "path": "card-05.png",
+      "bytes": 148454,
+      "sha256": "9b4f1e1f6da6a415d4b400abb275be7eaa6de82a332e8b8913baa8508b719fde"
+    },
+    {
+      "path": "card-06.png",
+      "bytes": 142813,
+      "sha256": "becbf7aa4c0ec104b89551b36a0fb7dda3c4a65a268fecc0c39140e24414c4c6"
+    },
+    {
+      "path": "card-07.png",
+      "bytes": 153664,
+      "sha256": "abd6e48590665609148d878c414c50b22feb952047fefaa1bd8a1a1f6d5e3cb9"
+    },
+    {
+      "path": "card-08.png",
+      "bytes": 140417,
+      "sha256": "5d7f8179b9c273da766579aa5043045e47e16802e7f4e44a39d15d6ef60aaf66"
+    },
+    {
+      "path": "card-09.png",
+      "bytes": 145299,
+      "sha256": "54eca30dee297db16298838a5952e3df5fb8d719279bb907693c28740632fe23"
+    },
+    {
+      "path": "card-10.png",
+      "bytes": 132641,
+      "sha256": "2453f447aed23de5be4895e5d9f14c5d24c566a6ed1ca2b76658087782973420"
+    },
+    {
+      "path": "card-11.png",
+      "bytes": 148986,
+      "sha256": "a58a8220cec1ae3334f3f0331d67f5b524e4f954d52604c1b852db4ec3cd8b1a"
+    },
+    {
+      "path": "card-12.png",
+      "bytes": 138542,
+      "sha256": "96e41986e697507bc5b9c22aa057749f8d36a2cc7ac960499a96ff4f0a1fc71d"
+    },
+    {
+      "path": "cards-only.zip",
+      "bytes": 1615656,
+      "sha256": "609d5458a82c505aa8ec5fff4ea6a4f582aaf32cba5cbe85f0f0eab78e64b094"
+    },
+    {
+      "path": "cards-overview.png",
+      "bytes": 470019,
+      "sha256": "cbfeeb0ae9032c1c4f7419faa41a2919dc8ba29c1978a18eabdc32ca12d684b4"
+    },
+    {
+      "path": "chapters.txt",
+      "bytes": 777,
+      "sha256": "f5029c9a969ee857f81b6ed8ab43752f58e2ea4e7807fa152223aa8ba582a207"
+    },
+    {
+      "path": "complete-package.zip",
+      "bytes": 64571122,
+      "sha256": "5f7770eacf9996904a1511b38b9f1e1be91d0da9ee346d7722c5bd0fbbb3cc3e"
+    },
+    {
+      "path": "editable-source.zip",
+      "bytes": 14519767,
+      "sha256": "5d538079597842c2db2975377764624a52ab47424a653c9b90a44070e8c817fe"
+    },
+    {
+      "path": "FONT-LICENSE.txt",
+      "bytes": 4388,
+      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+    },
+    {
+      "path": "full-video.mp4",
+      "bytes": 51815544,
+      "sha256": "babbb157bf89df214a43bd79b20258c2e49faa0b217f07e800178be3dade023e"
+    },
+    {
+      "path": "highlights-captions.srt",
+      "bytes": 1533,
+      "sha256": "429bfd3ed2b67a0d0fc33cb5cb63872ba6cd5d67ff053a74022b014e36dc12e3"
+    },
+    {
+      "path": "highlights-captions.vtt",
+      "bytes": 1543,
+      "sha256": "9a411877c3db5698e121224983936c77ebe3d7615bbc7de82a500d4f24f1d674"
+    },
+    {
+      "path": "index.html",
+      "bytes": 14378,
+      "sha256": "dd59c5a8dc2b85c993055f72fbd9d2b2720639f47f1d236010233367b2bdec22"
+    },
+    {
+      "path": "LandscapeCover.png",
+      "bytes": 159215,
+      "sha256": "24f64fff03cdeec475ee8c1a3ad343f9750f2929a39094f9c718cdabc4aa3599"
+    },
+    {
+      "path": "narration.mp3",
+      "bytes": 6694260,
+      "sha256": "0ee70144f966ac9954bb6b7b2558783d556ff15742b9af5f3bd5103acf558306"
+    },
+    {
+      "path": "PortraitCover.png",
+      "bytes": 145692,
+      "sha256": "1334c202a105c5062cd6543257d7eec7b4f68160b6bc8ccc4d4eb230005ef744"
+    },
+    {
+      "path": "vertical-highlights.mp4",
+      "bytes": 4735972,
+      "sha256": "5c3d07ba3507008d910d7a72a28c4fad3d002fe53a4973e2093f6b7a3269a3be"
+    },
+    {
+      "path": "youtube-thumbnail.jpg",
+      "bytes": 78890,
+      "sha256": "5d8a888fcf7b8ea03c71b0e42211223f6af3416560f459395324257ad3c57a9e"
+    },
+    {
+      "path": "圖卡替代文字.txt",
+      "bytes": 3059,
+      "sha256": "201d30b1845d6f3d2500303df311e7ae72deaabf02218a16490772017b21a596"
+    },
+    {
+      "path": "旁白腳本.txt",
+      "bytes": 11717,
+      "sha256": "82a09049e951342690c4de3362cace8a6875e13e553de4059cb139cd88a40edc"
+    },
+    {
+      "path": "發布順序.txt",
+      "bytes": 1105,
+      "sha256": "2bc7cf60558698652d5f6a78753154c6052a381365a41b0a7089d8666ebdce2b"
+    },
+    {
+      "path": "貼文與影片文案.txt",
+      "bytes": 6121,
+      "sha256": "f153d53b179ec93fc8112358e2c5c15843af55deea63fca6e1c9c2e5f649edbd"
+    },
+    {
+      "path": "資料與方法.txt",
+      "bytes": 4628,
+      "sha256": "dacb3be8b8a8099496a41ad97702abbf91cef4425c597cb0edd5b82801ce3e58"
+    }
+  ]
+}
