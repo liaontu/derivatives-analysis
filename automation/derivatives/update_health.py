@@ -57,7 +57,7 @@ def build(output, now):
         if key=='branches':
             ranks=read(output/'warrant-branches.json');items=ranks.get('items',[])
             dates=sorted(r['date'] for r in items if r.get('date'))
-            current=sum(bool(expected and r.get('date','')>=expected and r.get('status')=='ok') for r in items)
+            current=sum(bool(expected and (r.get('date') or '')>=expected and r.get('status')=='ok') for r in items)
             groups.append({'id':key,'label':label,'dataFrom':dates[0] if dates else None,'dataThrough':dates[-1] if dates else None,
                            'expectedDate':expected,'status':'current' if items and current==len(items) and data.get('outcome')=='success' and ranks.get('status')=='ok' else 'awaiting',
                            'reason':f'本次收錄 {len(items)} 檔中 {current} 檔排行日期已核對；僅買賣超排行，非全部權證或全部分點。'})
