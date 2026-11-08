@@ -45,7 +45,7 @@ NAMES = {'futures':'台灣期貨行情（日／夜盤）', 'options':'台灣選�
          'futures-large':'期貨大額交易人（全商品／到期別）', 'options-large':'選擇權大額交易人（全商品／到期別）',
          'futures-fcm':'期貨商成交量－期貨全表', 'options-fcm':'期貨商成交量－選擇權全表',
          'pcr':'臺指選擇權 P/C', **{n:v[0] for n,v in US_FEEDS.items()}}
-FCM_NOTE = '免費頁僅當期與前一期；已找回本站保存的完整歷史。較早缺日未取得免費全表，不以排行摘要補值。'
+FCM_NOTE = '官方當期／前一期 CSV 按檔內日期保存完整日表；前一期可涵蓋整個上月。雙邊成交量不是多空方向，也不是分點部位；缺日不以排行或月量補值。'
 FCM_SOURCE = 'https://www.taifex.com.tw/cht/7/dailyFCM'
 US_CALENDAR = 'https://www.cboe.com/about/hours/us-options'
 # Verified exchange closures, not federal/bank holidays. Unknown years stay unverified.
@@ -195,6 +195,8 @@ def ingest_saved(output, index):
             # A downloaded all-session CSV is richer than the current API projection.
             previous=index['feeds'].get(name,{}).get(day)
             if previous:
+                if name.endswith('fcm') and previous.get('evidence',{}).get('format')=='official-fcm-daily-csv':
+                    continue  # Refresh through the validated full CSV, never a filtered live projection.
                 # Downloaded CSV snapshots are richer; refresh them separately when
                 # the live source has been checked later. Other live feeds can revise.
                 if name in DOWNLOADS or record is not feed: continue
@@ -389,9 +391,12 @@ def run(output,start,end,full=False,git_repo=None,max_windows=6):
     baseline=(date.fromisoformat(start)-timedelta(days=10)).isoformat()
     if __package__:
         from .fcm_monthly import update as update_fcm_monthly
+        from .fcm_history import update as update_fcm_history
     else:
         from fcm_monthly import update as update_fcm_monthly
+        from fcm_history import update as update_fcm_history
     for operation in (lambda:update_fcm_monthly(output,client,start,end),
+                      lambda:update_fcm_history(output,index,client,start,end),
                       lambda:download_tw(output,index,client,baseline,end,None if full else max_windows),
                       lambda:download_us(output,index,client,baseline,end,None if full else 2),
                       lambda:backfill_stock(output,index,client,baseline,end,None if full else 2)):

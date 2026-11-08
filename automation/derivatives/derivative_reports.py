@@ -394,10 +394,10 @@ def build(output, obs, issues, kind, start, end):
                         'date':max(dates) if dates else None,'baseDate':base if base in entries else None,
                         'days':len(dates),'expected':len(expected),'missingDates':missing,
                         'status':'partial' if missing else 'available',
-                        'note':'交易熱度，不代表方向；免費較早全表未保存的日期不補值',
+                        'note':'官方完整日表；雙邊成交量代表交易熱度，不代表方向或分點持倉。未取得日期不補值',
                         'url':'https://www.taifex.com.tw/cht/7/dailyFCM',
                         'sha256':digest({d:entries[d]['sha256'] for d in dates})})
-    if any(s['id'].endswith('-fcm') and s['missingDates'] for s in sources):
+    if history.get('fcmSourceAudit'):
         report['fcmSourceAudit'] = history.get('fcmSourceAudit')
     if kind == 'monthly':
         if __package__:
@@ -419,7 +419,7 @@ def build(output, obs, issues, kind, start, end):
     if report.get('fcmMonthly'):
         p=report['fcmMonthly']
         report['findings'].append({'topic':'期貨商整月交易熱度',
-            'fact':p['month']+' 官方月表已收錄 '+str(len(p['products']))+' 個商品分類；完整日表缺漏仍另列。',
+            'fact':p['month']+' 官方月表已收錄 '+str(len(p['products']))+' 個商品分類；日表覆蓋依下方各日來源核對。',
             'reading':'以各商品成交量與前五名代碼占比觀察集中度；經紀與自營各列一碼，未合併金控，也不能判斷買賣方向。'})
     return report
 
@@ -469,8 +469,10 @@ def html_document(report):
         parts.append('<h2>'+escape(f['topic'])+'</h2><p>'+escape(f['fact'])+'</p><p>'+escape(f['reading'])+'</p>')
     if report.get('fcmSourceAudit'):
         audit=report['fcmSourceAudit']
-        parts.append('<h2>期貨商缺日來源查核</h2><p>'+escape(audit['checkedAt']+'：'+audit['conclusion'])+'</p>'+table(
+        parts.append('<h2>期貨商免費來源與補抓驗證</h2><p>'+escape(audit['checkedAt']+'：'+audit['conclusion'])+'</p>'+table(
             ['來源','查核結果'],[[x['name'],x['result']] for x in audit['checks']]))
+        if audit.get('license'):
+            parts.append('<p>'+escape(audit['license']['attribution'])+' <a href="https://data.gov.tw/license">政府資料開放授權條款第 1 版</a></p>')
     if report.get('fcmMonthly'):
         monthly=report['fcmMonthly']
         parts.append('<h2>官方期貨商完整月表分析</h2><p>'+escape(monthly['month']+'；'+monthly['note'])+'</p>'+table(

@@ -1,16 +1,86 @@
 {
+  "version": 2,
+  "status": "resolved",
   "checkedAt": "2026-11-08",
   "start": "2026-10-01",
-  "end": "2026-10-21",
-  "missingTradingDays": 14,
-  "conclusion": "本次查核未取得可直接公開且通過驗證的較早完整日表；逐日缺漏仍保留。官方免費完整月表可另作全月分析，不拆回日數。",
+  "end": "2026-11-06",
+  "previousMissingTradingDays": 14,
+  "missingTradingDays": 0,
+  "license": {
+    "name": "政府資料開放授權條款－第1版",
+    "url": "https://data.gov.tw/license",
+    "provider": "金融監督管理委員會證券期貨局／臺灣期貨交易所",
+    "attribution": "臺灣期貨交易所期貨商交易量日報表；依政府資料開放授權條款第 1 版釋出。本站依原資料整理，未經資料提供機關認可或推薦。"
+  },
+  "conclusion": "2026/10/01～11/06 的期貨、選擇權期貨商完整日表均已補齊 24／24 個交易日。官方「前一期日報表」CSV 實際包含 10 月 19 個交易日，補入先前缺少的 14 天；不是把月合計拆成日數。",
+  "correction": "先前未檢查前一期 CSV 的實際內容，錯誤判斷免費來源無法補齊。此次以下載內容與交叉核對結果更正；舊報告修訂保留。此結論限於上述日期，不代表更早日表皆可下載。",
   "checks": [
-    {"name":"期交所／政府開放資料", "url":"https://data.gov.tw/dataset/11356", "result":"政府 CSV 本次回傳 11/02～11/06；期交所免費日表提供當期與前一期。原始授權為政府資料開放授權條款第 1 版。"},
-    {"name":"ODPortal", "url":"https://odportal.tw/dataset/nerNm5k1", "result":"資料集目錄仍連到相同官方 CSV；本次未取得缺漏期間的獨立完整日表。"},
-    {"name":"Internet Archive", "url":"https://web.archive.org/", "result":"查詢 10/01～10/22 的 Daily_FUT API 與期交所 Daily_FUT／Daily_OPT 檔案 CDX，回傳空清單。這只代表本次查詢沒有找到快照。"},
-    {"name":"GitHub 公開專案快照", "url":"https://github.com/gentoobreaking/tw-quant-mcp/blob/main/snapshots/raw/get_fcm_volume_reports.json", "result":"可取得的 FCM 範例屬 8 月，該檔提交紀錄也停在 8 月；其他查到的爬蟲沒有公開所需 10 月原始表。"},
-    {"name":"FinMind 免費按商品查詢", "url":"https://finmind.github.io/tutor/TaiwanMarket/Derivative/", "result":"未登入實測 TX 與 TXO 均能取得缺漏期間。TX 的 10/30 日夜盤合計為 3,623,386，等於官方 10 月月表，與官方當日 218,202 不符；未通過完整日表匯入驗證。其他商品與 14 天全表尚未全面驗證。"},
-    {"name":"FinMind 使用條款", "url":"https://finmind.github.io/PrivacyPolicy/", "result":"條款限制對外再散布原始資料與鏡像服務。本次測試回應只留在本機，不放進公開儲存庫或網站。"},
-    {"name":"官方免費期貨商月表", "url":"https://openapi.taifex.com.tw/v1/Monthly_FUT", "result":"取得 10 月期貨 1,782 列（54 代碼 × 33 商品）、選擇權 300 列（50 代碼 × 6 商品）。另存月表與來源雜湊；不抵銷逐日缺漏。"}
+    {
+      "name": "期交所前一期日報表－期貨",
+      "url": "https://www.taifex.com.tw/cht/7/getFCMFilePreOpen?filename=Daily_FUT_OpenData.csv",
+      "result": "10 月 19 日，每日 51 代碼 × 33 商品＝1,683 列；補入 14 日、23,562 列，保留零成交列。"
+    },
+    {
+      "name": "期交所前一期日報表－選擇權",
+      "url": "https://www.taifex.com.tw/cht/7/getFCMFilePreOpen?filename=Daily_OPT_OpenData.csv",
+      "result": "10 月 19 日，每日 45 代碼 × 6 商品＝270 列；補入 14 日、3,780 列，保留零成交列。"
+    },
+    {
+      "name": "期交所官方日表／月表交叉核對",
+      "url": "https://www.taifex.com.tw/cht/7/dailyFCM",
+      "result": "10/22、27、28、29、30 五個既存日期逐筆一致。10 月逐日加總按代碼與商品核對官方月表，期貨 1,782 格、選擇權 300 格完全一致；月表獨有的零交易代碼不虛造日列。大台與臺指選擇權另與一般＋盤後行情的雙邊成交量核對。"
+    },
+    {
+      "name": "期貨日表政府開放資料目錄",
+      "url": "https://data.gov.tw/dataset/11356",
+      "result": "免費；政府資料開放授權條款第 1 版，依條款標示提供者及來源。"
+    },
+    {
+      "name": "選擇權日表政府開放資料目錄",
+      "url": "https://data.gov.tw/dataset/11360",
+      "result": "免費；政府資料開放授權條款第 1 版，依條款標示提供者及來源。"
+    },
+    {
+      "name": "每日自動補漏與驗證紀錄",
+      "url": "https://liaontu.github.io/derivatives-analysis/data/derivatives/fcm-history-check.json",
+      "result": "每日工作流程檢查當期與前一期日表；每份記錄日期、列數、來源 SHA-256、日月交叉核對結果。失敗保留舊資料與錯誤證據；原始回應及舊修訂保留。"
+    }
+  ],
+  "previousChecks": [
+    {
+      "name": "期交所／政府開放資料",
+      "url": "https://data.gov.tw/dataset/11356",
+      "result": "政府 CSV 本次回傳 11/02～11/06；期交所免費日表提供當期與前一期。原始授權為政府資料開放授權條款第 1 版。"
+    },
+    {
+      "name": "ODPortal",
+      "url": "https://odportal.tw/dataset/nerNm5k1",
+      "result": "資料集目錄仍連到相同官方 CSV；本次未取得缺漏期間的獨立完整日表。"
+    },
+    {
+      "name": "Internet Archive",
+      "url": "https://web.archive.org/",
+      "result": "查詢 10/01～10/22 的 Daily_FUT API 與期交所 Daily_FUT／Daily_OPT 檔案 CDX，回傳空清單。這只代表本次查詢沒有找到快照。"
+    },
+    {
+      "name": "GitHub 公開專案快照",
+      "url": "https://github.com/gentoobreaking/tw-quant-mcp/blob/main/snapshots/raw/get_fcm_volume_reports.json",
+      "result": "可取得的 FCM 範例屬 8 月，該檔提交紀錄也停在 8 月；其他查到的爬蟲沒有公開所需 10 月原始表。"
+    },
+    {
+      "name": "FinMind 免費按商品查詢",
+      "url": "https://finmind.github.io/tutor/TaiwanMarket/Derivative/",
+      "result": "未登入實測 TX 與 TXO 均能取得缺漏期間。TX 的 10/30 日夜盤合計為 3,623,386，等於官方 10 月月表，與官方當日 218,202 不符；未通過完整日表匯入驗證。其他商品與 14 天全表尚未全面驗證。"
+    },
+    {
+      "name": "FinMind 使用條款",
+      "url": "https://finmind.github.io/PrivacyPolicy/",
+      "result": "條款限制對外再散布原始資料與鏡像服務。本次測試回應只留在本機，不放進公開儲存庫或網站。"
+    },
+    {
+      "name": "官方免費期貨商月表",
+      "url": "https://openapi.taifex.com.tw/v1/Monthly_FUT",
+      "result": "取得 10 月期貨 1,782 列（54 代碼 × 33 商品）、選擇權 300 列（50 代碼 × 6 商品）。另存月表與來源雜湊；不抵銷逐日缺漏。"
+    }
   ]
 }

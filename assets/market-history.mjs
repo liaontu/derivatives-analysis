@@ -10,7 +10,7 @@ export function coverageTable(index,{table,tr}){
 }
 export function fcmAudit(audit,{table,tr}){
   if(!audit)return '';
-  return `<details class="fcm-source-audit"><summary>期貨商缺日：免費來源查核（${esc(audit.checkedAt)}）</summary><p>${esc(audit.conclusion)}</p>${table(['來源','查核結果'],audit.checks.map(x=>tr([/^https:\/\//.test(x.url)?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name),esc(x.result)])))}<p><a href="#derivative-report?kind=monthly">查看官方完整月表分析 →</a></p></details>`;
+  return `<details class="fcm-source-audit"><summary>期貨商免費來源與補抓驗證（${esc(audit.checkedAt)}）</summary><p>${esc(audit.conclusion)}</p>${audit.correction?`<p>${esc(audit.correction)}</p>`:''}${audit.license?`<p>${esc(audit.license.provider)}；${esc(audit.license.attribution)} <a href="https://data.gov.tw/license" target="_blank" rel="noopener">授權條款</a></p>`:''}${table(['來源','查核結果'],audit.checks.map(x=>tr([/^https:\/\//.test(x.url)?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name),esc(x.result)])))}<p><a href="#derivative-report?kind=monthly">查看官方完整月表分析 →</a></p></details>`;
 }
 async function readArchive(entry){
   if(!safeArchivePath(entry.path))throw Error('歷史檔案路徑不符');

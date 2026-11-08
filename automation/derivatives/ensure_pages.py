@@ -80,13 +80,15 @@ def expected_series(root):
         paths.append('data/derivatives/market-history.json')
         for feed, entries in json.loads(history.read_bytes()).get('feeds', {}).items():
             if not entries: continue
-            for day in sorted({min(entries), max(entries)}):
+            for day in sorted(entries if feed.endswith('-fcm') else {min(entries), max(entries)}):
                 entry = entries[day]
                 relative = Path(entry['path'])
                 if relative.is_absolute() or '..' in relative.parts or relative.parts[0] != 'market-history':
                     raise ValueError('Unsafe history archive path')
                 paths.append('data/derivatives/'+entry['path'])
     monthly = root/'data/derivatives/fcm-monthly.json'
+    if (root/'data/derivatives/fcm-history-check.json').exists():
+        paths.append('data/derivatives/fcm-history-check.json')
     if monthly.exists():
         paths.append('data/derivatives/fcm-monthly.json')
         for entries in json.loads(monthly.read_bytes()).get('months',{}).values():
