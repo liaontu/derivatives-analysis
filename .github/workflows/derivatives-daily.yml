@@ -46,6 +46,11 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_directory.py
+      - name: Repair bounded missing listed warrant price and volume
+        id: extra_history
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/warrant_extra_history.py --max-days 2
       - name: Archive option history and recompute daily changes and event tests
         id: option_history
         if: steps.gate.outputs.run == 'true'
@@ -61,6 +66,21 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/market_history.py --max-windows 6
+      - name: Collect free settlement corporate-action and cash references
+        id: supplement_sources
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/supplement_sources.py
+      - name: Match full ordinary-stock universe and recompute expiry-aware study
+        id: market_completion
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/market_completion.py
+      - name: Repair missing underlying closes from dated official cash tables
+        id: stock_history_repair
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/stock_history_repair.py
       - name: Archive warrant volume and futures/options positioning reports
         id: reports
         if: steps.gate.outputs.run == 'true'
@@ -91,26 +111,16 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_relationship.py
-      - name: Archive daily warrant and stock brief
-        id: report_brief
-        if: steps.gate.outputs.run == 'true'
-        continue-on-error: true
-        run: python automation/derivatives/warrant_series_reports.py --kind daily
       - name: Update broker signal event study
         id: signal_backtest
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/warrant_signal_backtest.py
-      - name: Collect free settlement corporate-action and cash references
-        id: supplement_sources
+      - name: Archive daily warrant and stock brief
+        id: report_brief
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
-        run: python automation/derivatives/supplement_sources.py
-      - name: Match full ordinary-stock universe and recompute expiry-aware study
-        id: market_completion
-        if: steps.gate.outputs.run == 'true'
-        continue-on-error: true
-        run: python automation/derivatives/market_completion.py
+        run: python automation/derivatives/warrant_series_reports.py --kind daily
       - name: Build futures and options daily brief
         id: derivative_daily
         if: steps.gate.outputs.run == 'true'
@@ -118,7 +128,7 @@ jobs:
         run: python automation/derivatives/derivative_reports.py --kind daily
       - name: Record actual market check
         if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
-        run: python automation/derivatives/check_status.py market supplement_sources=${{ steps.supplement_sources.outcome }} market_completion=${{ steps.market_completion.outcome }} market_history=${{ steps.market_history.outcome }} derivative_daily=${{ steps.derivative_daily.outcome }} collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }} tpex_history=${{ steps.tpex_history.outcome }} stock_institutional=${{ steps.stock_institutional.outcome }} institutional_history=${{ steps.institutional_history.outcome }} institutional_research=${{ steps.institutional_research.outcome }}
+        run: python automation/derivatives/check_status.py market stock_history_repair=${{ steps.stock_history_repair.outcome }} extra_history=${{ steps.extra_history.outcome }} supplement_sources=${{ steps.supplement_sources.outcome }} market_completion=${{ steps.market_completion.outcome }} market_history=${{ steps.market_history.outcome }} derivative_daily=${{ steps.derivative_daily.outcome }} collect=${{ steps.collect.outcome }} directory=${{ steps.directory.outcome }} option_history=${{ steps.option_history.outcome }} stock_options=${{ steps.stock_options.outcome }} reports=${{ steps.reports.outcome }} journal=${{ steps.journal.outcome }} relationship=${{ steps.relationship.outcome }} signal_backtest=${{ steps.signal_backtest.outcome }} report_brief=${{ steps.report_brief.outcome }} tpex_history=${{ steps.tpex_history.outcome }} stock_institutional=${{ steps.stock_institutional.outcome }} institutional_history=${{ steps.institutional_history.outcome }} institutional_research=${{ steps.institutional_research.outcome }}
       - name: Measure data storage without rewriting history
         if: steps.gate.outputs.run == 'true'
         run: python automation/derivatives/storage_health.py
@@ -144,5 +154,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python automation/derivatives/ensure_pages.py
       - name: Report unavailable sources
-        if: steps.supplement_sources.outcome == 'failure' || steps.market_completion.outcome == 'failure' || steps.market_history.outcome == 'failure' || steps.derivative_daily.outcome == 'failure' || steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure' || steps.tpex_history.outcome == 'failure' || steps.stock_institutional.outcome == 'failure' || steps.institutional_history.outcome == 'failure' || steps.institutional_research.outcome == 'failure'
+        if: steps.stock_history_repair.outcome == 'failure' || steps.extra_history.outcome == 'failure' || steps.supplement_sources.outcome == 'failure' || steps.market_completion.outcome == 'failure' || steps.market_history.outcome == 'failure' || steps.derivative_daily.outcome == 'failure' || steps.collect.outcome == 'failure' || steps.directory.outcome == 'failure' || steps.option_history.outcome == 'failure' || steps.stock_options.outcome == 'failure' || steps.reports.outcome == 'failure' || steps.journal.outcome == 'failure' || steps.relationship.outcome == 'failure' || steps.signal_backtest.outcome == 'failure' || steps.report_brief.outcome == 'failure' || steps.tpex_history.outcome == 'failure' || steps.stock_institutional.outcome == 'failure' || steps.institutional_history.outcome == 'failure' || steps.institutional_research.outcome == 'failure'
         run: exit 1

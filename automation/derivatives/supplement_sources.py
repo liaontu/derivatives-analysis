@@ -152,7 +152,9 @@ def companies(raw,market):
         if not re.fullmatch(r'[0-9A-Z]{4,6}',code):raise ValueError('Invalid company membership')
         if len(code)!=4:continue  # TDRs are retained in raw evidence, outside ordinary-stock scope.
         if code in seen:raise ValueError('Duplicate company membership')
-        seen.add(code);result.append({'code':code,'name':r.get(short_key) or r[name_key],'market':market})
+        listing=r.get('上市日期' if market=='TWSE' else 'DateOfListing')
+        seen.add(code);result.append({'code':code,'name':r.get(short_key) or r[name_key],'market':market,
+            'listedDate':iso(listing) if listing and str(listing).strip() else None})
     return result
 
 
@@ -264,8 +266,9 @@ def run(output,start='2026-10-01',end=None,client=None,now=None):
         key='index-settlement-'+first[:7]
         params={'start_year':first[:4],'start_month':first[5:7],'end_year':first[:4],'end_month':first[5:7],'all':'all'}
         collect(key,'https://www.taifex.com.tw/cht/12/optIndxFSP',lambda raw,a=first,b=last:parse_settlements(raw,'INDEX',a,b),params,refresh=last>=end)
-    for first,last in month_ranges(start,end):
+    for first,last in month_ranges(option_start,end):
         for kind,route in [('SSF','sSFFSP'),('SSO','sSOFSP')]:
+            if kind=='SSF' and last<start:continue
             params={'down_type':'1','queryYear':first[:4],'queryMonth':first[5:7],'contractId':'all','contractMonth':'all'}
             collect(kind.lower()+'-settlement-'+first[:7],'https://www.taifex.com.tw/cht/12/'+route,
                 lambda raw,k=kind,a=first,b=last:parse_settlements(raw,k,a,b),params,refresh=last>=end)
@@ -274,6 +277,11 @@ def run(output,start='2026-10-01',end=None,client=None,now=None):
         for market,url in [('TWSE','https://www.twse.com.tw/rwd/zh/exRight/TWT49U?'+urlencode({'startDate':first.replace('-',''),'endDate':stop.replace('-',''),'response':'json'})),
             ('TPEX','https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?'+urlencode({'startDate':first.replace('-','/'),'endDate':stop.replace('-','/'),'response':'json'}))]:
             collect('exrights-'+market+'-'+first[:7],url,lambda raw,m=market,a=first,b=stop:exrights(raw,m,a,b),refresh=last>=end)
+    if __package__:
+        from .supplement_actions import collect_all
+    else:
+        from supplement_actions import collect_all
+    collect_all(collect,documents,output,start,end,now[:10])
     calendar=h.load_calendar(output)
     from datetime import timedelta
     base=date.fromisoformat(start)-timedelta(days=1)

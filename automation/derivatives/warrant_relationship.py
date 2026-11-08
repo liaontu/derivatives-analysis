@@ -266,7 +266,7 @@ def backfill(output,cache,terms_cache,start,end):
     calendar=load_calendar(output)
     membership=read_cache(cache/'companies.json.gz')
     members={k:v['name'] for k,v in membership['names'].items()}
-    source=Sources(cache,cache)
+    source=Sources(cache,cache,output)
     payloads=load_branches(output)
     previous=[];previous_spots={}
     cursor=date.fromisoformat(sessions(start,1,calendar)[0])

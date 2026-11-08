@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
 from statistics import mean, median
+import re
 
 if __package__:
     from . import market_history as h
@@ -70,6 +71,7 @@ def summary(events):
         valid=[e for e in values if e['status']=='evaluated'];returns=[e['returnPct'] for e in valid]
         result.append({'rule':rule,'cp':side,'segment':segment,'signals':len(values),'evaluated':len(valid),
             'statusCounts':dict(Counter(e['status'] for e in values)),
+            'gapReasonCounts':dict(Counter(e['dataReason'] for e in values if e.get('dataReason') and e['status'] in ('missing-entry','missing-exit'))),
             'settled':sum(e.get('exitBasis')=='official-settlement' for e in valid),
             'v1Evaluated':sum(e['v1Status']=='evaluated' for e in values),'distinctDates':len({e['date'] for e in values}),
             'grossMedian':median(returns) if returns else None,
@@ -79,15 +81,36 @@ def summary(events):
     return result
 
 
+def audit_missing(output,events):
+    """A zero-volume official row is evidence of no trade, never a fill price."""
+    cache={};sources={};counts=Counter()
+    for e in events:
+        if e['status'] not in ('missing-entry','missing-exit'):continue
+        month=e['month'];day=e['entryDate'] if e['status']=='missing-entry' else e['exitDate']
+        if not re.fullmatch(r'\d{6}(?:[WF]\d)?',month):raise ValueError('Unsafe option month')
+        if month not in cache:
+            path='option-history/TXO/'+month+'.json';doc=h.read(output/path,{})
+            if doc and (doc.get('contract'),doc.get('month'))!=('TXO',month):raise ValueError('Option history identity mismatch')
+            cache[month]={d:{(r[0],r[1]):dict(zip(doc['fields'],r)) for r in rows} for d,rows in doc.get('days',{}).items()}
+            sources[month]={'path':path,'sha256':hashlib.sha256((output/path).read_bytes()).hexdigest() if doc else None}
+        r=cache[month].get(day,{}).get((e['strike'],e['cp']))
+        reason='source-row-missing' if r is None else 'no-trade' if r.get('volume')==0 else 'traded-close-missing'
+        e.update(dataReason=reason,dataReasonDate=day,quoteEvidence={'month':month,'date':day,'row':r})
+        counts[reason]+=1
+    return {'version':'official-row-gap-audit-v1','counts':dict(counts),'sources':sources,
+        'note':'逐筆比對官方一般盤同月份／履約價／C/P。無成交與漏抓分列；結算參考價與買賣報價不替代實際成交價。'}
+
+
 def build(output,settlements,cutoff):
     original=h.read(output/'option-backtest/TXO.json',{})
     if original.get('version')!='option-events-v1':raise ValueError('Unknown event cohort version; preserve previous study')
     final={r['month']:r for r in settlements if r['contract']=='TXO'}
     events=[r for e in original['events'] if (r:=outcome(e,final.get(e['month']),cutoff))]
+    audit=audit_missing(output,events)
     return {'schemaVersion':1,'version':VERSION,'asOf':cutoff,'contract':'TXO','splitDate':original['splitDate'],
         'sourceVersion':original['version'],'sourceHash':hashlib.sha256(h.encode(original)).hexdigest(),
         'settlementHash':hashlib.sha256(h.encode(final)).hexdigest(),'historyType':'reconstructed','liveOos':False,
-        'costVersion':COST_VERSION,'scenarios':SCENARIOS,'summary':summary(events),'events':events,
+        'costVersion':COST_VERSION,'scenarios':SCENARIOS,'summary':summary(events),'events':events,'gapAudit':audit,
         'rules':['沿用 v1 訊號、去重與開發／評估分割；未依結果選樣。','次一交易日收盤進場，原定五個交易日後收盤退出；先到期則用官方最後結算價計算內含價值。',
             '無進場成交價不建立部位；未到期但缺退出成交價仍缺值。到期內含價值 0 是有效結算。',
             '僅標準 TXO，每點 50 元；未將此成本模型套用到調整型個股選擇權。',

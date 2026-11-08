@@ -1,0 +1,53 @@
+name: warrant-liquidity
+on:
+  schedule:
+    # Taipei 18:43, 20:43 and 22:43. Validated issuer/day CSVs are reused.
+    - cron: '43 10,12,14 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  deployments: read
+concurrency:
+  group: derivatives-daily
+  cancel-in-progress: false
+  queue: max
+jobs:
+  update:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download official quotation quality by issuer
+        id: liquidity
+        continue-on-error: true
+        run: python automation/derivatives/warrant_liquidity.py
+      - name: Refresh daily warrant report with actual coverage
+        id: report
+        continue-on-error: true
+        run: python automation/derivatives/warrant_series_reports.py --kind daily
+      - name: Record checked date and failures
+        run: python automation/derivatives/check_status.py liquidity warrant_liquidity=${{ steps.liquidity.outcome }} report_brief=${{ steps.report.outcome }}
+      - name: Publish data and failure evidence
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/derivatives/
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: official warrant quotation quality and coverage'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Ensure Pages publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/derivatives/ensure_pages.py
+      - name: Report unavailable data
+        if: steps.liquidity.outcome == 'failure' || steps.report.outcome == 'failure'
+        run: exit 1

@@ -21,7 +21,9 @@ export function evidencePanel(report, {table, tr}) {
   const imported = report.historyBackfill;
   const institutional=report.institutionalReview;
   const institutionalNote=institutional?`<p class="notice">本期現股法人 ${fmt(institutional.days)}／${fmt(institutional.expectedDays??institutional.days)} 個交易日、${fmt(institutional.stockDaySamples)} 個股日；同日股證可比較 ${fmt(institutional.pairedStockDaySamples)} 個股日。${esc(institutional.message)} ${institutional.missingDates?.length?'缺法人日報：'+esc(institutional.missingDates.join('、')):''} <a href="#stock-institutional">查看法人與權證觀察 →</a></p><details><summary>法人累計與本期事件回測明細</summary>${institutionalPanel(institutional,{table,tr})}</details>`:'';
-  const importNote = imported ? `<div class="notice">上櫃官方歷史補入：<strong>${fmt(imported.days)} 個交易日、${fmt(imported.quoteRows)} 筆行情</strong>（含零成交），其中 ${fmt(imported.tradedRows)} 筆有有效成交價。<p>${esc(imported.basis)}</p><a href="data/derivatives/tpex-history-backfill.json" download>下載逐日來源、筆數與 SHA-256 →</a></div>` : '';
+  const dataReview=report.dataReview;
+  const reviewPanel=dataReview?`<h4>本期補資料與可判讀範圍</h4>${table(['資料','實際覆蓋','限制／日期'],dataReview.rows.map(r=>tr(r.map(esc))))}<details><summary>影響價格比較的公司行動與限制</summary>${table(['生效日','股票','事件','官方參考價'],dataReview.capitalActions.map(r=>tr([esc(r.date),esc(r.code+' '+r.name),esc(r.action),finite(r.reference)?fmt(r.reference,2):'—'])))}<ul>${dataReview.notes.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul></details><p><a href="#market-completion">逐檔核對與權證流動性資料 →</a></p>`:'';
+  const importNote = reviewPanel+(imported ? `<div class="notice">上櫃官方歷史補入：<strong>${fmt(imported.days)} 個交易日、${fmt(imported.quoteRows)} 筆行情</strong>（含零成交），其中 ${fmt(imported.tradedRows)} 筆有有效成交價。<p>${esc(imported.basis)}</p><a href="data/derivatives/tpex-history-backfill.json" download>下載逐日來源、筆數與 SHA-256 →</a></div>` : '');
   const review = report.strategyReview;
   let strategy = '';
   if (review) {

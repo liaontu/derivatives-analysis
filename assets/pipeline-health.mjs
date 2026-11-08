@@ -8,8 +8,10 @@ export function latestModules(receipts) {
   return result;
 }
 export async function pipelineHealth({load,table,tr}) {
-  const receipts=await Promise.all(['check-market','check-branches','check-series-reports'].map(k=>load(k).catch(()=>null)));
+  const receipts=await Promise.all(['check-market','check-branches','check-series-reports','check-liquidity'].map(k=>load(k).catch(()=>null)));
   const rows=latestModules(receipts);
+  names.warrant_liquidity='權證官方報價品質';names.extra_history='上市權證歷史價量補漏';
+  names.stock_history_repair='現股歷史收盤補漏';
   const issues=Object.values(rows).filter(r=>r.outcome!=='success'||['partial','retained','unavailable','failure','failed','error'].includes(r.status));
   const publication=receipts[2]?.publication;
   if(publication && publication.status!=='verified') issues.push({status:publication.status});

@@ -533,6 +533,12 @@ def report_html(report):
 
 def archive(output, content, now):
     """Save a versioned JSON/HTML pair and update the index; a rerun with identical content changes nothing."""
+    if __package__:
+        from .report_data_review import build as data_review
+    else:
+        from report_data_review import build as data_review
+    review=data_review(output,content['period']['start'],content['period']['end'])
+    if review:content={**content,'dataReview':review}
     content_sha = digest(content)
     folder = output / 'warrant-series-reports'
     path = output / 'warrant-series-reports.json'

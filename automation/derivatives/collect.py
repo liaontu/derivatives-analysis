@@ -55,6 +55,7 @@ FEEDS = {
     "twse-warrants": ("上市權證行情與條款", "https://www.twse.com.tw/rwd/zh/stock/warrantStock?response=json"),
     "twse-volume": ("上市認購權證成交量", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=0999&response=json"),
     "twse-volume-put": ("上市認售權證成交量", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=0999P&response=json"),
+    "twse-volume-extra": ("上市特殊代碼成交量（僅與權證名錄配對）", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALL&response=json"),
     "tpex-terms": ("上櫃權證條款", TPEX + "tpex_warrant_issue"),
     "tpex-warrants": ("上櫃權證行情", TPEX + "tpex_warrant_daily_quts"),
     "tpex-underlyings": ("權證標的上櫃股票／ETF 收盤價", TPEX + "tpex_mainboard_daily_close_quotes"),
@@ -146,7 +147,7 @@ def fetch(url):
 def normalize(name, raw):
     if name in US_FEEDS:
         return normalize_us(name, raw, number, iso_date)
-    if name in ("twse-volume", "twse-volume-put"):
+    if name in ("twse-volume", "twse-volume-put", "twse-volume-extra"):
         if not isinstance(raw, dict) or raw.get("stat") != "OK":
             raise ValueError("Missing TWSE warrant trading report")
         tables = [t for t in raw.get("tables", []) if {"證券代號", "成交股數", "成交金額"} <= set(t.get("fields", []))]
@@ -156,6 +157,7 @@ def normalize(name, raw):
         rows = [dict(zip(table["fields"], row)) for row in table.get("data", [])]
         result = []
         for row in rows:
+            if name=='twse-volume-extra' and not re.fullmatch(r'\d{5}[BCXY]',str(row.get('證券代號',''))):continue
             units = number(row.get("成交股數"))
             result.append({"date": iso_date(raw.get("date")), "code": row.get("證券代號"),
                            "volume": units / 1000 if units is not None else None,
@@ -237,7 +239,7 @@ def validate(name, rows, today, calendar=None):
     if not 0 <= age <= (35 if name in COT_DATASETS else 14):
         raise ValueError(f"Source date out of range: {latest}")
     latest_rows = [r for r in rows if r["date"] == latest]
-    field = "code" if name in ("twse-warrants", "twse-volume", "twse-volume-put", "tpex-warrants", "tpex-terms", "tpex-underlyings") else "contract"
+    field = "code" if name in ("twse-warrants", "twse-volume", "twse-volume-put", "twse-volume-extra", "tpex-warrants", "tpex-terms", "tpex-underlyings") else "contract"
     if name != "pcr" and any(not r.get(field) for r in latest_rows):
         raise ValueError(f"Missing {field}")
     numeric = "oi" if name in COT_DATASETS else "totalVolume" if name == "us-options" else "price" if name == "us-futures" else "netOi" if name.endswith("-institutional") else "oi" if name.endswith("-large") else "oiRatio" if name == "pcr" else "strike" if name == "tpex-terms" else "price" if name in ("futures", "options", "twse-warrants", "tpex-warrants", "tpex-underlyings") else "volume"
@@ -330,7 +332,7 @@ def update_feed(name, old, raw, now, today, calendar=None):
 def combine_warrants(feeds):
     # The directory loads these from the source snapshots; keep the bulk quote download compact.
     detail_keys = {'listedDate', 'exerciseStart', 'initialIssueK', 'addedK', 'cancelledK', 'cap', 'floor', 'reset'}
-    volumes = {r["code"]: r for name in ("twse-volume", "twse-volume-put") for r in feeds.get(name, {}).get("rows", [])}
+    volumes = {r["code"]: r for name in ("twse-volume-extra", "twse-volume", "twse-volume-put") for r in feeds.get(name, {}).get("rows", [])}
     terms = {r["code"]: r for r in feeds.get("tpex-terms", {}).get("rows", [])}
     result = []
     for row in feeds.get("twse-warrants", {}).get("rows", []):

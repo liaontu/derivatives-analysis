@@ -43,12 +43,13 @@ def institutional_review(output, start, end):
     return period_review(output,start,end)
 
 
-def daily_report(output):
+def daily_report(output,day=None):
     folder = output / 'daily-reports/warrant-journal'
     index = read(folder / 'index.json')
     if index.get('status') != 'ok' or not index.get('dates'):
         raise ValueError('整合日報來源尚未完成；保留前次報告')
-    day = max(index['dates'])
+    day = day or max(index['dates'])
+    if day not in index['dates']:raise ValueError('Requested daily report is not archived')
     report = read(folder / (day + '.json'))
     if report.get('date') != day or report.get('status') not in ('ok', 'partial'):
         raise ValueError('整合日報日期或狀態未通過核對')
@@ -182,6 +183,10 @@ def followup_review(output, start, end):
 
 
 def quality_html(report):
+    if __package__:
+        from .report_data_review import html as data_review_html
+    else:
+        from report_data_review import html as data_review_html
     q = report.get('quality')
     if not q:
         return '<p>舊版報告未保存逐項有效樣本與欄位缺漏統計；不由目前資料回填舊版。</p>'
@@ -199,7 +204,7 @@ def quality_html(report):
         for market,items in institutional['leaders'].items():
             institution_note+=f'<h3>{esc(market)} 法人累計觀察（外資淨股數絕對值前十名）</h3><div class="scroll"><table><tr><th>標的</th><th>有效／缺日</th><th>外資淨股數</th><th>投信淨股數</th><th>自營避險淨股數</th></tr>'+''.join(f'<tr><td>{esc(r["code"]+" "+r["name"])}</td><td>{r["days"]}／{r["missingDays"]}</td><td>{r["foreign"]:,}</td><td>{r["trust"]:,}</td><td>{r["dealerHedge"]:,}</td></tr>' for r in items)+'</table></div>'
         institution_note+='<h3>本期到觀察日的法人訊號後五日價格變化</h3><p>只計觀察日落在本期的事件；本期新訊號尚未到觀察日另計；價格未還原，不是交易損益。</p><div class="scroll"><table><tr><th>市場／規則</th><th>現股／權證有效樣本</th><th>價格變動中位數%（股／證）</th><th>等待／其他狀態</th></tr>'+''.join(f'<tr><td>{esc(r["market"]+"／"+r["label"])}</td><td>{r["stockSamples"]}／{r["warrantSamples"]}</td><td>{esc(round(r["stockMedianPct"],2) if r["stockMedianPct"] is not None else "—")}／{esc(round(r["warrantMedianPct"],2) if r["warrantMedianPct"] is not None else "—")}</td><td>{esc(str(r["statuses"]))}</td></tr>' for r in institutional.get('research',[]))+'</table></div>'
-    import_note = (f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else '') + institution_note
+    import_note = data_review_html(report.get('dataReview')) + (f'<p>上櫃官方歷史補入：{imported["days"]} 個資料日、{imported["quoteRows"]:,} 筆行情（含零成交），其中 {imported["tradedRows"]:,} 筆有效成交。{esc(imported["basis"])}</p>' if imported else '') + institution_note
     strategy = '<h3>本月策略檢查</h3><p>' + esc(review['message']) + '</p>' if review else ''
     if review and review.get('accounts'):
         strategy += '<div class="scroll"><table><tr><th>策略</th><th>完成交易</th><th>自啟用報酬%</th><th>最大回撤%</th><th>樣本狀態</th></tr>' + ''.join(

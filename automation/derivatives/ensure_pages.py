@@ -107,6 +107,16 @@ def expected_series(root):
             if relative.is_absolute() or '..' in relative.parts or relative.parts[0] not in ('market-completion','option-settlement-study'):
                 raise ValueError('Unsafe completion artifact path')
             paths.append('data/derivatives/'+entry['path'])
+    liquidity=root/'data/derivatives/warrant-liquidity.json'
+    if liquidity.exists():
+        data=json.loads(liquidity.read_bytes());paths.append('data/derivatives/warrant-liquidity.json')
+        entries=list(data.get('sources',{}).values())+[r for r in data.get('items',[]) if r['code'] in ('2330','6488')]
+        for entry in entries:
+            relative=Path(entry['path'])
+            if relative.is_absolute() or '..' in relative.parts or relative.parts[0]!='warrant-liquidity':raise ValueError('Unsafe quotation artifact path')
+            paths.append('data/derivatives/'+entry['path'])
+    if (root/'data/derivatives/warrant-extra-history.json').exists():paths.append('data/derivatives/warrant-extra-history.json')
+    if (root/'data/derivatives/stock-history-repair.json').exists():paths.append('data/derivatives/stock-history-repair.json')
     return {p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in paths}
 
 

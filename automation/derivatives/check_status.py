@@ -6,6 +6,9 @@ import json
 import os
 
 ARTIFACTS = {
+    'stock_history_repair': ['stock-history-repair.json'],
+    'warrant_liquidity': ['warrant-liquidity.json'], 'extra_history': ['warrant-extra-history.json'],
+    'report_brief': ['warrant-series-reports.json'],
     'supplement_sources': ['market-supplement.json'], 'market_completion': ['market-completion.json'],
     'market_history': ['market-history.json'],
     'derivative_daily': ['derivative-reports.json'], 'derivative_series': ['derivative-reports.json'],
@@ -33,7 +36,7 @@ def read(path):
 
 
 def record(output, kind, outcomes, run_id, now=None):
-    if kind not in ('market', 'branches', 'series-reports') or not str(run_id).isdecimal():
+    if kind not in ('market', 'branches', 'series-reports', 'liquidity') or not str(run_id).isdecimal():
         raise ValueError('Invalid collector receipt')
     now = now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     path = output / f'check-{kind}.json'
@@ -55,7 +58,8 @@ def record(output, kind, outcomes, run_id, now=None):
         data = next((d for d in records if d.get('status') in BAD), records[0] if records else {})
         status = data.get('status', 'ok')
         reason = data.get('error') or data.get('message')
-        failures = [s for d in records for s in d.get('sources', []) if s.get('status') in BAD]
+        source_rows=lambda d: ([dict(v,id=k) for k,v in d['sources'].items()] if isinstance(d.get('sources'),dict) else d.get('sources',[]))
+        failures = [s for d in records for s in source_rows(d) if s.get('status') in BAD]
         if failures:
             status, reason = 'retained', '; '.join(s['id']+': '+str(s.get('error') or s['status']) for s in failures)
         if any(not d for d in records):
@@ -99,7 +103,7 @@ def record(output, kind, outcomes, run_id, now=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('kind', choices=['market', 'branches', 'series-reports'])
+    parser.add_argument('kind', choices=['market', 'branches', 'series-reports', 'liquidity'])
     parser.add_argument('outcomes', nargs='+')
     args = parser.parse_args()
     outcomes = {}

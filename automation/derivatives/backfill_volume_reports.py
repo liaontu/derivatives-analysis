@@ -44,6 +44,38 @@ def digest(data):
     return hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 
+def dated_all_quotes(output,day):
+    """Price/volume baseline only. Never infer old warrant terms from later terms."""
+    index=c.read(output/'warrant-extra-history.json') or {}
+    evidence=index.get('days',{}).get(day,{}).get('source')
+    if not evidence:return None,None
+    raw=gzip.decompress((output/evidence['path']).read_bytes())
+    if hashlib.sha256(raw).hexdigest()!=evidence['sha256']:raise ValueError('Baseline source hash mismatch')
+    doc=json.loads(raw)
+    if doc.get('stat')!='OK' or c.iso_date(doc.get('date'))!=day:raise ValueError('Baseline official date/status mismatch')
+    tables=[t for t in doc.get('tables',[]) if {'證券代號','證券名稱','成交股數','收盤價'}<=set(t.get('fields',[]))]
+    if len(tables)!=1:raise ValueError('Baseline quote schema missing')
+    rows={};table=tables[0]
+    for values in table['data']:
+        if len(values)!=len(table['fields']):raise ValueError('Baseline quote width mismatch')
+        r=dict(zip(table['fields'],values));volume=c.number(r['成交股數']);code=r['證券代號']
+        if volume is None or volume<0 or code in rows:raise ValueError('Baseline volume invalid')
+        rows[code]={'name':r['證券名稱'],'volume':volume/1000,'price':trade_price(c.number(r['收盤價']),volume)}
+    return rows,{**evidence,'id':'twse-all-price-volume-baseline','date':day,'basis':'同日同代號同名稱價量，未回填歷史履約條款'}
+
+
+def seed_quote_baseline(row,baselines,bank,spots):
+    if row['market']!='TWSE':return
+    identity=tuple(row.get(k) for k in ('market','code','name','underlying','cp'))
+    for day,quotes in baselines.items():
+        if day>=row['date']:continue
+        q=quotes.get(row['code'])
+        if not q or q['name']!=row['name']:continue
+        bank.setdefault(identity,{}).setdefault(day,[day,q['price'],q['volume']])
+        spot=quotes.get(row['underlying'])
+        if spot:spots[row['underlying']].setdefault(day,spot['price'])
+
+
 def seed_git(repo, cache, first, last):
     """Reuse normalized official snapshots. Keep the newest revision for each date."""
     commits = subprocess.check_output(['git','-C',str(repo),'log','--max-count=70','--format=%H','--',
@@ -113,10 +145,11 @@ def otc_quotes(raw, day):
 
 
 class Sources:
-    def __init__(self,cache,old_cache):
+    def __init__(self,cache,old_cache,extra_output=None):
         self.cache = cache
         self.old = CachedSource(old_cache)
         self.denied = set()
+        self.extra_output=extra_output
 
     def listed(self,day):
         feeds, audits = {}, []
@@ -135,6 +168,16 @@ class Sources:
                 raise ValueError('TWSE cached source date mismatch')
             feeds[name] = {'date':str(day),'status':'ok','rows':rows}
             audits.append(audit)
+        if self.extra_output:
+            index=c.read(self.extra_output/'warrant-extra-history.json') or {}
+            extra=index.get('days',{}).get(str(day),{}).get('source')
+            if extra:
+                raw=gzip.decompress((self.extra_output/extra['path']).read_bytes())
+                if hashlib.sha256(raw).hexdigest()!=extra['sha256']:raise ValueError('Extra volume raw hash mismatch')
+                doc=json.loads(raw)
+                if c.iso_date(doc.get('date'))!=str(day):raise ValueError('Extra volume date mismatch')
+                feeds['twse-volume-extra']={'date':str(day),'status':'ok','rows':c.normalize('twse-volume-extra',doc)}
+                audits.append({**extra,'id':'twse-volume-extra','date':str(day)})
         return c.combine_warrants(feeds),audits
 
     def otc(self,day):
@@ -168,9 +211,14 @@ def reconstruct(output,cache,old_cache,repo,start,end):
     first = date.fromisoformat(baseline_days(start.isoformat(),calendar)[0])
     seed_git(repo,cache,str(first),str(end))
     members = membership(cache)
-    source = Sources(cache,old_cache)
+    source = Sources(cache,old_cache,output)
     bank, spots = {}, defaultdict(dict)
     market_days = defaultdict(set)
+    baselines={};baseline_sources=[]
+    for day in baseline_days(start.isoformat(),calendar):
+        rows,evidence=dated_all_quotes(output,day)
+        if rows is not None:
+            baselines[day]=rows;baseline_sources.append(evidence);market_days['TWSE'].add(day)
     coverage = {}
     cursor = first
     while cursor <= end:
@@ -181,6 +229,10 @@ def reconstruct(output,cache,old_cache,repo,start,end):
         rows, audits, failures, available = [], [], [], []
         for market in ('TWSE','TPEX'):
             try:
+                if market=='TWSE' and cursor<start and day in baselines:
+                    # Only a volume/price baseline is needed before the report period.
+                    # Older warrantStock terms queries are officially unavailable.
+                    available.append(market);continue
                 quotes, references = source.get(market,cursor)
                 available.append(market)
                 market_days[market].add(day)
@@ -191,6 +243,7 @@ def reconstruct(output,cache,old_cache,repo,start,end):
         rows=[r for r in rows if r.get('underlying') in members['names']]
         current_spots=defaultdict(set)
         for row in rows:
+            seed_quote_baseline(row,baselines,bank,spots)
             row['price']=trade_price(row.get('price'),row.get('volume'))
             identity=tuple(row.get(k) for k in ('market','code','name','underlying','cp'))
             bank.setdefault(identity,{})[day]=[day,row['price'],row.get('volume')]
@@ -227,7 +280,7 @@ def reconstruct(output,cache,old_cache,repo,start,end):
                     identity=tuple(r.get(k) for k in ('market','code','name','underlying','cp'))
                     histories[r['underlying']]['quotes'][r['code']]={**{k:r.get(k) for k in ('name','market','cp')},
                                                                    'rows':list(bank[identity].values())}
-                report=build_volume_report(day,rows,histories,names,audits+members['sources'],baseline)
+                report=build_volume_report(day,rows,histories,names,audits+members['sources']+baseline_sources,baseline)
                 report['coverage']=meta
                 report['reconstructed']=True
                 archive(output,'warrant-volume',report)

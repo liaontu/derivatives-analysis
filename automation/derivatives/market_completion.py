@@ -10,13 +10,15 @@ import re
 
 if __package__:
     from . import market_history as h, cross_market as cross, settlement_study as study
+    from .supplement_actions import state_for
     from .stock_institutional import normalize
 else:
     import market_history as h, cross_market as cross, settlement_study as study
+    from supplement_actions import state_for
     from stock_institutional import normalize
 
 VERSION='market-completion-v1'
-FIELDS=['date','close','volume','amount','returnPct','referenceAdjustedPct','foreign','trust','dealer','dealerOwn','dealerHedge','total','referenceAction']
+FIELDS=['date','close','volume','amount','returnPct','referenceAdjustedPct','foreign','trust','dealer','dealerOwn','dealerHedge','total','referenceAction','priceStatus','institutionalStatus']
 FUTURE_FIELDS=['date','contract','month','close','volume','oi','bid','ask','returnPct','closingBasis','basisPct']
 LIMITS=[
     {'item':'無成交的實際成交價','status':'不能補造','effect':'缺價格、價差與回測進出場仍留白；到期結算僅處理已有有效進場的到期部位。'},
@@ -24,7 +26,7 @@ LIMITS=[
     {'item':'券商實際費率、借券與資金成本','status':'依帳戶而異','effect':'官方稅率與交易所費表可查；其餘只作可修改成本情境，實際值須由券商取得。'},
     {'item':'權證全部券商分點與投資人身分','status':'來源僅排行','effect':'沿用網站每日 300 檔加自選排行；不能還原全部分點、持倉、大戶本人或交易動機。'},
     {'item':'美國全商品歷史與即時鏈','status':'公開來源有限','effect':'維持原有 CFE、Cboe 與 CFTC 範圍；沒有將它們宣稱為全美市場。'},
-    {'item':'完整公司行動與歷史退市名錄','status':'部分可核對','effect':'補入官方除權息參考價及期交所契約調整。公司名錄是收集時點名錄，仍有存活偏差；減資、分割等未具完整因子時不算調整報酬。'},
+    {'item':'完整公司行動與歷史退市名錄','status':'官方事件已擴充','effect':'已查除權息、減資、面額變更、停牌及契約調整。恢復交易日可比較官方參考價；不是含息總報酬。名錄仍是目前名錄，有存活偏差。'},
 ]
 
 
@@ -53,6 +55,8 @@ def merge_settlements(documents,end):
 
 
 def returns(current,previous,action=None,unresolved=False):
+    if action and action.get('kind') in ('reduction','denomination'):
+        return (current/previous-1)*100 if current and previous else None, (current/action['reference']-1)*100 if current and action.get('reference') else None
     if current is None or previous is None or current<=0 or previous<=0:return None,None
     plain=(current/previous-1)*100
     if unresolved:return plain,None
@@ -78,11 +82,26 @@ def build(output):
     members={m:{r['code']:r for r in docs['companies-'+m]} for m in ('TWSE','TPEX')}
     universe={(m,c):r for m,items in members.items() for c,r in items.items()}
     actions={(r['market'],r['code'],r['date']):r for k,rows in docs.items() if k.startswith('exrights-') for r in rows}
+    capital=[]
+    for key,rows in docs.items():
+        if not (key.startswith(('capital-TWSE-','capital-TPEX-','denomination-','capital-notice-'))):continue
+        for r in rows:
+            details=docs.get('capital-detail-'+r['code']+'-'+r.get('detailDate',''),[])
+            row={**r,**(details[0] if details else {})};capital.append(row)
+            if row['date']<=end:actions[(row['market'],row['code'],row['date'])]=row
+    unique={}
+    for r in capital:
+        identity=(r['market'],r['code'],r['date']);unique[identity]={**unique.get(identity,{}),**{k:v for k,v in r.items() if v is not None}}
+    capital=list(unique.values())
+    for r in capital:
+        if r['date']<=end:actions[(r['market'],r['code'],r['date'])]=r
+    suspensions=capital+[r for k,rows in docs.items() if k.startswith('suspension-') for r in rows]
     contract_actions=docs.get('contract-adjustments',[])
     issues={(r['code'],r['date']) for r in contract_actions if r['action'] not in ('除息','除權','除權息')}
     mappings={r['contract']:r for r in docs.get('stock-futures',[]) if r['type'] in ('上市普通股標的證券','上櫃普通股標的證券')}
     data={key:{**r,'fields':FIELDS,'futureFields':FUTURE_FIELDS,'rows':[],'futures':[],
-               'actions':sorted([a for (m,c,d),a in actions.items() if (m,c)==key and start<=d<=end],key=lambda a:a['date'])} for key,r in universe.items()}
+        'actions':sorted([a for (m,c,d),a in actions.items() if (m,c)==key and start<=d<=end],key=lambda a:a['date']),
+        'tradingStates':[s for s in suspensions if (s['market'],s['code'])==key]} for key,r in universe.items()}
     coverage=[];source_days={};prior_quotes={};prior_futures={};unmapped=set()
     for day in [base]+days:
         quotes={};flows={};sources=[];day_errors=[]
@@ -118,8 +137,12 @@ def build(output):
                 q=quotes.get(market,{}).get(code,{});old=prior_quotes.get(market,{}).get(code,{})
                 action=actions.get((market,code,day));plain,adjusted=returns(q.get('close'),old.get('close'),action,(code,day) in issues and not action)
                 f=flows.get(market,{}).get(code,{})
+                halted=state_for(suspensions,market,code,day)
+                before_listing=payload.get('listedDate') and day<payload['listedDate']
+                price_status='traded' if q.get('close') is not None else 'not-yet-listed' if before_listing else 'suspended' if halted else 'no-trade' if q.get('volume')==0 else 'source-row-missing' if not q else 'traded-close-missing'
                 payload['rows'].append([day,q.get('close'),q.get('volume'),q.get('amount'),plain,adjusted,
-                    *[f.get(k) for k in FIELDS[6:12]],action['action'] if action else ('契約調整待核' if (code,day) in issues else None)])
+                    *[f.get(k) for k in FIELDS[6:12]],action['action'] if action else ('契約調整待核' if (code,day) in issues else None),
+                    price_status,'reported' if f else 'source-row-absent-not-zero'])
             for (symbol,month),r in futures.items():
                 m=mappings[symbol];market='TWSE' if m['type'].startswith('上市') else 'TPEX';key=(market,m['code'])
                 if key not in data:continue
@@ -130,7 +153,12 @@ def build(output):
                 data[key]['futures'].append([day,symbol,month,close,r['volume'],r.get('oi'),r.get('bid'),r.get('ask'),change,basis,basis/spot*100 if basis is not None else None])
             for market in members:
                 eligible=set(members[market]);q=quotes.get(market,{});f=flows.get(market,{})
+                reasons=defaultdict(list)
+                for code in sorted(eligible):
+                    status=data[(market,code)]['rows'][-1][13]
+                    if status!='traded':reasons[status].append(code)
                 coverage.append({'date':day,'market':market,'universe':len(eligible),'quoteRows':len(eligible&q.keys()),
+                    'priceReasons':dict(reasons),
                     'priced':sum(q[c].get('close') is not None for c in eligible&q.keys()),'institutional':len(eligible&f.keys()),
                     'missingQuoteCodes':sorted(eligible-q.keys()),'missingInstitutionalCodes':sorted(eligible-f.keys()),
                     'futureContracts':len({symbol for symbol,month in futures if mappings[symbol]['code'] in eligible and mappings[symbol]['type'].startswith('上市' if market=='TWSE' else '上櫃')})})
@@ -140,7 +168,7 @@ def build(output):
     for key,payload in sorted(data.items()):
         payload.update(version=VERSION,start=start,end=end,base=base)
         path='market-completion/stocks/'+payload['market']+'-'+payload['code']+'.json';h.save(output/path,payload)
-        catalog.append({k:payload[k] for k in ('code','name','market')}|{'path':path,'sha256':digest(payload),
+        catalog.append({k:payload.get(k) for k in ('code','name','market','listedDate')}|{'path':path,'sha256':digest(payload),
             'futureContracts':sorted({r[1] for r in payload['futures']})})
     fees={r['商品']:r for r in docs.get('official-fees',[])}
     if any(float(fees.get(k,{}).get('期貨交易稅比率',-1))!=v for k,v in [('TXO',.001),('TX',.00002)]):
@@ -148,17 +176,32 @@ def build(output):
     settlements=merge_settlements(docs,end);research=study.build(output,settlements,end)
     study_path='option-settlement-study/TXO.json';h.save(output/study_path,research)
     reference={'settlements':settlements,'contractAdjustments':contract_actions,'adjustedContracts':docs.get('adjusted-contracts',[]),
-               'officialFees':docs.get('official-fees',[]),'stockFutures':docs.get('stock-futures',[])}
+               'officialFees':docs.get('official-fees',[]),'stockFutures':docs.get('stock-futures',[]),
+               'capitalActions':capital,'suspensions':suspensions}
     refpath='market-completion/references.json';h.save(output/refpath,reference)
+    if __package__:
+        from .collect import read as read_quotes
+    else:
+        from collect import read as read_quotes
+    warrant_gaps=[]
+    for q in (read_quotes(output/'warrants.json') or {}).get('rows',[]):
+        if q.get('volume') is not None:continue
+        underlying_market=next((r['market'] for r in catalog if r['code']==q.get('underlying')),q['market'])
+        state=state_for(suspensions,underlying_market,q.get('underlying'),q['date'])
+        # The underlying suspension explains the absent quote, but is not itself
+        # a published zero-volume row for the warrant.
+        warrant_gaps.append({'code':q['code'],'name':q['name'],'market':q['market'],'date':q['date'],'underlying':q.get('underlying'),
+            'reason':'underlying-suspended' if state else 'source-row-missing','underlyingEvidence':state})
     result={'schemaVersion':1,'version':VERSION,'start':start,'end':end,'base':base,'checkedAt':source['checkedAt'],
         'status':'partial' if errors or source.get('status')!='ok' else 'ok','error':'; '.join(e['error'] for e in errors) or source.get('error'),'errors':errors,'coverage':coverage,'stocks':catalog,
         'references':{'path':refpath,'sha256':digest(reference)},'research':{'path':study_path,'sha256':digest(research),
-             'version':study.VERSION,'summary':research['summary'],'splitDate':research['splitDate'],'signals':len(research['events']),'rules':research['rules']},
-        'sourceDays':source_days,'referenceSources':evidence,'limitations':LIMITS,
+             'version':study.VERSION,'summary':research['summary'],'gapAudit':research['gapAudit'],'splitDate':research['splitDate'],'signals':len(research['events']),'rules':research['rules']},
+        'sourceDays':source_days,'referenceSources':evidence,'limitations':LIMITS,'warrantVolumeGaps':warrant_gaps,
         'scope':'目前官方上市櫃普通股名錄，按原始報表逐檔核對；歷史重建並非無存活偏差的歷史成分名單。法人單位為股，不能跨股票相加解讀為資金流。',
         'futureScope':'一般盤、原始標準商品代碼、單一月份契約；大小型各列，不合併口數。報酬比較同商品同月份的前一交易日；收盤價差非同步、未扣持有成本。調整型代碼不倒套最新條款。',
         'unmappedFutures':sorted(unmapped),'summary':{'stocks':len(catalog),'futureContracts':len(mappings),
-            'futureUnderlyings':len({r['code'] for r in mappings.values()}),'settlements':len(settlements),'exRights':sum(len(p['actions']) for p in data.values())}}
+            'futureUnderlyings':len({r['code'] for r in mappings.values()}),'settlements':len(settlements),'exRights':sum(len(p['actions']) for p in data.values()),
+            'capitalActions':len({(r['market'],r['code'],r['date']) for r in capital if start<=r['date']<=end})}}
     h.save(output/'market-completion.json',result)
     return result
 
@@ -187,6 +230,12 @@ def report_sections(output,start,end):
          'rows':[[r['rule'],r['cp'],r['segment'],r['signals'],r['evaluated'],r['settled'],round(r['scenarios']['base']['median'],2) if r['scenarios']['base']['median'] is not None else None] for r in stats]},
         {'title':'仍不能由免費公開日報補出的資料','note':'缺漏影響判讀、價差和模擬成交，並非只影響模擬交易。','headers':['項目','狀態','對分析的影響'],
          'rows':[[r['item'],r['status'],r['effect']] for r in index['limitations']]}]
+    labels={'no-trade':'官方零成交','suspended':'官方停牌','not-yet-listed':'尚未上市櫃','source-row-missing':'來源未列行情','traded-close-missing':'有量但缺收盤'}
+    sections.append({'title':'缺價原因核對（不以報價補造成交）','note':'每日逐檔核對；法人未列仍留白，不推定為零。TXO 研究另以保存的官方行情逐筆驗證。',
+        'headers':['日期','市場／研究','原因','筆數','代碼／說明'],
+        'rows':[[r['date'],r['market'],labels.get(k,k),len(v),'、'.join(v)] for r in coverage for k,v in r.get('priceReasons',{}).items()]
+            +[[end,'TXO v2',labels.get(k,k),sum(r.get('gapReasonCounts',{}).get(k,0) for r in stats),'本期訊號；缺價不成交'] for k in ('no-trade','source-row-missing','traded-close-missing')]
+        })
     proof={'id':'market-completion','label':'免費來源補齊與到期結算研究','date':max(r['date'] for r in coverage),'baseDate':None,
            'days':len({r['date'] for r in coverage}),'expected':len(h.expected_days(output,'futures',start,end)),
            'missingDates':sorted(set(h.expected_days(output,'futures',start,end))-{r['date'] for r in coverage}),

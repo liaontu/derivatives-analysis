@@ -21,8 +21,16 @@ def merge_history(old, quotes, underlying_rows, cutoff):
         if any(previous.get(k) and quote.get(k) and previous[k] != quote[k] for k in ('name', 'market', 'expiry')):
             previous = {}
         rows = {r[0]: r for r in previous.get('rows', [])}
-        rows[quote['date']] = [quote['date'], quote.get('price'), quote.get('volume')]
+        existing=rows.get(quote['date'])
+        # A later unavailable volume feed is not a source correction. Preserve
+        # an observed same-day row; an explicit zero-volume correction still applies.
+        kept=quote.get('volume') is None and existing is not None and existing[2] is not None
+        if not kept:rows[quote['date']] = [quote['date'], quote.get('price'), quote.get('volume')]
         meta = {k: quote.get(k) for k in ('name', 'market', 'cp', 'expiry', 'strike', 'style')}
+        retained=set(previous.get('retainedDates',[]))
+        if kept:retained.add(quote['date'])
+        else:retained.discard(quote['date'])
+        if retained:meta['retainedDates']=sorted(d for d in retained if d>=cutoff)
         history[code] = {**meta, 'rows': [rows[d] for d in sorted(rows) if d >= cutoff][-60:]}
     # Also prune warrants no longer supplied (expired/delisted).
     history = {code: {**item, 'rows': [[d, trade_price(p, v), v] for d, p, v in item['rows'] if d >= cutoff][-60:]}
@@ -30,6 +38,8 @@ def merge_history(old, quotes, underlying_rows, cutoff):
     history = {code: item for code, item in sorted(history.items()) if item['rows']}
     prices = {r[0]: r for r in (old or {}).get('underlyingPrices', [])}
     for row in underlying_rows:
+        old_price=prices.get(row['date'],[None,None])[1]
+        if (row.get('price') is None or row['price']<=0) and old_price is not None and old_price>0:continue
         prices[row['date']] = [row['date'], row.get('price')]
     return {'quotes': history, 'underlyingPrices': [prices[d] for d in sorted(prices) if d >= cutoff][-60:]}
 
