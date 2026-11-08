@@ -95,6 +95,7 @@ jobs:
           if [ -d data/derivatives/daily-reports/warrant-journal ]; then git add data/derivatives/daily-reports/warrant-journal/; fi
           if [ -f data/derivatives/warrant-series-reports.json ]; then git add data/derivatives/warrant-series-reports.json data/derivatives/warrant-series-reports/; fi
           if [ -f data/derivatives/check-branches.json ]; then git add data/derivatives/check-branches.json; fi
+          if [ -f data/derivatives/update-health.json ]; then git add data/derivatives/update-health.json; fi
           if [ -f data/derivatives/stock-warrant-coverage.json ]; then git add data/derivatives/stock-warrant-coverage.json; fi
           if [ -f data/derivatives/trading-calendar.json ]; then
             git add data/derivatives/trading-calendar.json
