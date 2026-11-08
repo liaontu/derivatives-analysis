@@ -48,8 +48,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 14983,
-      "sha256": "7e8bb4daa516d36e7e3fb28af6fbe0ba98af82522e26ed68a79b395fa7070b43"
+      "bytes": 15486,
+      "sha256": "4f6dddc2d0f48060253a1a4751ef01adb159860792f8fe5727c648a1b88a7e95"
     },
     {
       "path": "assets/app.mjs",
@@ -78,8 +78,8 @@
     },
     {
       "path": "assets/derivative-reports.mjs",
-      "bytes": 16826,
-      "sha256": "41704d6b3c59c4d5600d43b79dff6e1b87a7fc0c9834c6acc691e7783be0caa7"
+      "bytes": 17877,
+      "sha256": "da1d3cc0f2999a87232cc3d7669b562b5aae2232b13ffdc19608475820331339"
     },
     {
       "path": "assets/directory.mjs",
@@ -237,19 +237,24 @@
       "sha256": "87cdccf32eceba8b0a3eea059cd9491209ebec059c4a88119f8114a9a4092eaf"
     },
     {
+      "path": "automation/derivatives/cross_market_review.py",
+      "bytes": 27318,
+      "sha256": "28fef5f388a364a4c3e5bade2edee49e6d0fd004fb218956705071cc10f968a3"
+    },
+    {
       "path": "automation/derivatives/daily_reports.py",
       "bytes": 11454,
       "sha256": "30c6e6cac0b4e293a502ef824f85fbcc57ee3430c6357b037d4f1181ff181e9d"
     },
     {
       "path": "automation/derivatives/derivative_period.py",
-      "bytes": 22613,
-      "sha256": "20389f08cd9e645929c5555f15a6f7a5557ba4d9bf1f0bf50f0ebbbba240c7a7"
+      "bytes": 23149,
+      "sha256": "32dda2b2ede0f479266e9feef64eb453581955174197ed6aba091459da0f4f7c"
     },
     {
       "path": "automation/derivatives/derivative_reports.py",
-      "bytes": 45840,
-      "sha256": "523a28b3274b0ba10053bb5bcd63548787bf18b385ef40d12f9493a0dba103ec"
+      "bytes": 48449,
+      "sha256": "ed87d7a0a497634e15d3d8aeb4b228ea64d0aed783d1ad9e323eb224d8a08fef"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",

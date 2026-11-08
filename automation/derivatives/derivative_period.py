@@ -8,7 +8,7 @@ if __package__:
 else:
     import market_history as h
 
-VERSION='derivatives-period-v2'
+VERSION='derivatives-period-v3'
 
 
 def finite(x):
@@ -247,4 +247,14 @@ def build(output,report):
     analysis['charts']=cross['charts']+analysis['charts']
     analysis['sources']['cash-market']={d:e['sha256'] for d,e in cross['cashSources'].items()}
     analysis['sources']['stock-institutional']={d:e['sha256'] for d,e in cross['institutionalSources'].items()}
+    if __package__:
+        from .cross_market_review import build as completed_review
+    else:
+        from cross_market_review import build as completed_review
+    review=completed_review(output,analysis)
+    if review:
+        analysis['completedReview']=review
+        analysis['sections']=review['sections']+analysis['sections']
+        analysis['conclusions']=review['conclusions']+[r for r in conclusions if r['topic']=='美國波動率與部位的補充觀察']
+        analysis['charts'] += [c for c in review['charts'] if c]
     return analysis

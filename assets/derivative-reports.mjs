@@ -26,8 +26,10 @@ export function renderFcmMonthly(monthly,{table,tr}){
 }
 export function renderPeriod(analysis,{table,tr}){
   if(!analysis)return '';
+  const methods=(analysis.completedReview?.methodReferences||[]).filter(r=>/^https:\/\/www\.taifex\.com\.tw\//.test(r.url||'')).map(r=>`<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label)}</a>`).join(' · ');
   const charts=(analysis.charts||[]).filter(c=>/^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(c.image||'')).map(c=>`<figure style="margin:0;min-width:0"><h3>${esc(c.title)}</h3><img style="display:block;width:100%;max-width:420px" src="${esc(c.image)}" alt="${esc(c.title)}"><figcaption>${esc(c.note)}</figcaption></figure>`).join('');
   return `<section class="panel period-scope"><h2>期間分析範圍</h2><p>${esc(analysis.start)}～${esc(analysis.end)}，${n(analysis.days)} 個台灣交易日；比較基準 ${esc(analysis.base)}。</p><p>${esc(analysis.scope)} 方法版本 ${esc(analysis.version)}。</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px">${charts}</div></section>`+
+    (methods?`<p class="period-methods">判讀口徑與公司行動依據：${methods}</p>`:'')+
     analysis.sections.map(s=>`<section class="panel period-analysis"><h2>${esc(s.title)}</h2><p>${esc(s.note)}</p>${table(s.headers,s.rows.map(r=>tr(r.map(esc))))}</section>`).join('');
 }
 export function renderDerivativeReport(r,{table,tr,metric}){
@@ -43,12 +45,15 @@ export function renderDerivativeReport(r,{table,tr,metric}){
   const us=panel('us-options'),cot=panel('us-cot-financial'),cfe=panel('us-futures');
   const eventHeaders=['規則／權別','可評估／觸發','有效訊號日','報酬中位數','正報酬比例','平均報酬','平均減 1／3 點','排除／待觀察','判定'];
   const s=r.stockOptions,e=r.events;
+  const completed=r.periodAnalysis?.completedReview;
+  const summaryMetrics=completed?`${metric('普通股名錄',n(completed.aggregates.reduce((v,x)=>v+x.universe,0)),'期間比較另排除公司行動與缺價')}${metric('股期同契約可比較標的',n(completed.stockFuturesCoverage.sameContractEndpoints)+'／'+n(completed.stockFuturesCoverage.rosterUnderlyings),'缺基準不跨月補價')}${metric('本期有成交的個股選擇權',n(completed.stockOptions.filter(x=>x.option.activeDays>0).length)+'／'+n(completed.stockOptions.length),'一般時段；有成交不代表可執行組合交易')}`:
+    `${metric('期間基準日',esc(r.baseDate),'台灣按核實交易日曆；缺基準就不計變化')}${metric('選擇權歷史日數',n(e.sessions),'資料至 '+esc(e.through||'尚無資料'))}${metric('到期先前訊號可評估',n(e.followup.evaluated)+'／'+n(e.followup.signals),'缺價與未到日不算零報酬')}`;
   const coverage=r.sources.filter(x=>x.status!=='available'||x.missingDates?.length);
   const warning=coverage.length?`<p class="notice warning">${coverage.length} 項來源缺少本期資料、日期未齊或本次收集異常；下方逐項列出。數值不代表全期間完整。</p>`:'';
   return `<section class="panel derivative-summary"><div class="panel-head"><h2>${esc(r.title)}</h2><span class="tag">${esc(statuses[r.status]||r.status)}</span></div>
     <p class="coverage">報告期間 ${esc(period)} · 第 ${n(r.revision)} 版 · 保存時間 ${esc(taipeiTime(r.generatedAt))}（台北）</p>${warning}
     <div class="derivative-findings">${notes}</div>
-    <div class="metrics mobile-secondary" data-mobile-label="基準日與回測樣本">${metric('期間基準日',esc(r.baseDate),'台灣按核實交易日曆；缺基準就不計變化')}${metric('選擇權歷史日數',n(e.sessions),'資料至 '+esc(e.through||'尚無資料'))}${metric('到期先前訊號可評估',n(e.followup.evaluated)+'／'+n(e.followup.signals),'缺價與未到日不算零報酬')}</div>
+    <div class="metrics mobile-secondary" data-mobile-label="資料範圍與有效樣本">${summaryMetrics}</div>
     <p class="report-actions"><a class="text-link" href="data/derivatives/derivative-reports/${esc(r.id)}.html" target="_blank" rel="noopener">開啟完整報告／列印</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.html" download>下載 HTML</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.json" download>下載 JSON</a></p></section>
     ${renderFcmMonthly(r.fcmMonthly,{table,tr})}
     ${renderPeriod(r.periodAnalysis,{table,tr})}
@@ -75,7 +80,7 @@ export function renderDerivativeReport(r,{table,tr,metric}){
       <p class="notice warning">這是權利金價格事件研究，包含事後補抓資料；沒有帳戶績效、前瞻獲利或自動改策略。成本敏感度是減 1／3 個百分點，尚未扣真實完整費稅與滑價。</p></section>
     <section class="panel"><h2>${r.kind==='daily'?'下一交易日':'下一期'}重點觀察清單</h2><p>訊號資料日 ${esc(e.through||'尚無')}，共 ${n(e.watchTotal)} 個規則事件，按放量倍數列前 20 筆；不依未來報酬排序。同契約可能同時符合多種規則。</p>
       ${table(['訊號日／到期別','權別／履約價','規則','前五日均量倍數','價格變化','未平倉變化'],e.watch.map(x=>tr([esc(x.date)+'<small>'+esc(x.month)+'</small>',cp(x.cp)+'／'+n(x.strike),esc(({volume:'放量',momentum:'價漲放量增倉',pullback:'價跌放量增倉'})[x.rule]||x.rule),n(x.volumeMultiple,2),pct(x.pricePct),signed(x.oiChange)])))}
-      <p>下期核對外資淨部位是否延續、同一到期別籌碼是否移動，以及這批訊號的成交價是否足以追蹤；清單不是買賣推薦。</p></section>
+      <p>依官方結算日排除已到期 ${n(e.watchExcludedExpired||0)} 筆訊號；保留原始歷史研究。下期核對外資淨部位是否延續、同一到期別籌碼是否移動，以及成交價是否足以追蹤；清單不是買賣推薦。</p></section>
     <section class="panel"><h2>個股選擇權價差覆蓋</h2><p>資料日 ${esc(s.date||'尚無')}，${n(s.stocks)} 檔標的、${n(s.pairs)} 組配對；${n(s.active)} 組至少一邊有成交，${n(s.priced)} 組可算收盤價差，${n(s.quoted)} 組有至少一個方向三邊盤末報價。</p><p>缺少同步報價、可成交數量與完整成本時，不能確認套利。<a href="#stock-options">查看個股選擇權與現股 →</a></p></section>
     <section class="panel derivative-evidence"><h2>資料完整度與來源</h2><p><a href="#market-history">檢查全市場歷史、日夜盤與期貨商全表缺日 →</a></p>${warning}${table(['來源','資料日／基準','本期已收錄／預期（頻率）','狀態與缺漏'],r.sources.map(s=>tr([
       esc(s.label),esc(s.date||'無')+'<small>基準 '+esc(s.baseDate||'缺資料')+'</small>',n(s.days)+'／'+(s.expected===null?'依美國原頻率':n(s.expected))+(s.id.endsWith('-fcm-monthly')?'（月）':'（日／期）'),esc(statuses[s.status]||s.status)+'<small>'+esc(s.missingDates.join('、')||s.note||'已核對')+'</small>'])))}

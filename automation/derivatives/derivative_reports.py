@@ -242,7 +242,13 @@ def option_evidence(output, start, end, kind):
     events = backtest.get('events', [])
     days = [d for d in index.get('dates', []) if d <= end]
     through = days[-1] if days else None
-    recent = [e for e in events if e['date'] == through]
+    if __package__:
+        from .cross_market_review import settlement_expiries, active
+    else:
+        from cross_market_review import settlement_expiries, active
+    expiries=settlement_expiries(output)
+    all_recent = [e for e in events if e['date'] == through]
+    recent = [e for e in all_recent if active(e['month'],end,expiries)]
     # These are source-file signals, all reported with fixed rules and without outcome ranking.
     watch = sorted(recent, key=lambda e: (-(e.get('volumeMultiple') or 0), e['month'], e['strike'], e['cp'], e['rule']))[:20]
     watch = [{k: e.get(k) for k in ('date', 'month', 'strike', 'cp', 'rule', 'volumeMultiple', 'pricePct', 'oiChange')} for e in watch]
@@ -257,17 +263,23 @@ def option_evidence(output, start, end, kind):
             'sourceStatus': 'unavailable' if not days or not backtest else 'partial' if any(start <= d <= end for d in index.get('missingDates', [])) else 'available', 'missingDates': [d for d in index.get('missingDates', []) if start <= d <= end],
             'period': event_review(events, start, end), 'followup': stats(follow, end),
             'reviewStart': review_start, 'review': event_review(events, review_start, end) if kind == 'monthly' else [],
-            'watch': watch, 'watchTotal': len(recent), 'sha256': digest(evidence),
+            'watch': watch, 'watchTotal': len(recent), 'watchExcludedExpired':len(all_recent)-len(recent), 'sha256': digest(evidence),
             'notes': '每種規則的事件可重疊，不相加當成交易筆數。門檻只是研究檢查，不是統計顯著或上線批准。'}
 
 
 def strike_summary(output, end, base):
+    if __package__:
+        from .cross_market_review import settlement_expiries, active
+    else:
+        from cross_market_review import settlement_expiries, active
+    expiries=settlement_expiries(output)
     current, previous = {}, {}
     folder = output/'option-history/TXO'
     available = sorted({d for p in folder.glob('*.json') for d in read(p, {}).get('days', {}) if d <= end})
     through = available[-1] if available else None
     for path in folder.glob('*.json'):
         group = read(path)
+        if not active(group['month'],end,expiries):continue
         for day, target in ((through, current), (base, previous)):
             for row in group.get('days', {}).get(day, []):
                 strike, cp, _, _, oi = row[:5]
@@ -283,7 +295,7 @@ def strike_summary(output, end, base):
             rows.extend({'month': month, 'cp': cp, 'strike': key[1], 'oi': oi,
                          'change': delta(oi, previous.get(key))} for key, oi in side)
     return {'date': through, 'baseDate': base, 'rows': rows,
-            'scope': '一般時段，未平倉最多的三個到期別，各買賣權前三大履約價；只比相同契約'}
+            'scope': '一般時段，依已保存官方結算日排除當日及先前已到期契約，取存續未平倉最多三個到期別，各買賣權前三大履約價；只比相同契約'}
 
 
 def stock_option_coverage(output, end):
@@ -428,8 +440,14 @@ def build(output, obs, issues, kind, start, end):
             from derivative_period import build as period_analysis
         report['title']='現股、期貨與選擇權完整期間分析'
         report['periodAnalysis'] = period_analysis(output,report)
-        report['findings'] = report['periodAnalysis']['conclusions'] + report['findings']
+        report['findings'] = report['periodAnalysis']['conclusions'] + ([] if report['periodAnalysis'].get('completedReview') else report['findings'])
         cross=report['periodAnalysis']['crossMarket']
+        completed=report['periodAnalysis'].get('completedReview')
+        if completed:
+            sources.append({'id':'completed-cross-market','label':'補齊後普通股／股期／個股選擇權交叉分析','date':end,'baseDate':base,
+                'days':len(set(expected)-{r['date'] for r in completed['missingSources']}),'expected':len(expected),'missingDates':sorted({r['date'] for r in completed['missingSources']}),
+                'status':completed['status'],'note':'普通股逐檔 SHA-256；排除公司行動及已到期部位；缺欄位仍不補造。',
+                'url':'https://www.taifex.com.tw/cht/3/futDailyMarketReport','sha256':digest(completed['sources'])})
         for source_id,label,dates,evidence,baseline_missing in [
             ('cash-market','現股加權指數／成交／股票廣度',cross['cashSources'],cross['cashSources'],cross['baselineMissing']),
             ('stock-institutional','個股法人（權證標的樣本）',cross['institutionalSources'],cross['institutionalSources'],False),
@@ -452,7 +470,11 @@ def build(output, obs, issues, kind, start, end):
     if proof:
         report['supplementSections']=sections
         sources.append(proof)
-        report['findings'].append({'topic':'免費補資料與到期研究','fact':'已加入本期上市櫃現股、法人、個股期貨逐日涵蓋與獨立 v2 到期結算研究。','reading':'缺成交價仍留白；v2 加入到期結算與明示費稅情境，與原 v1 分開，不代表實盤績效。'})
+        if kind=='period' and report['periodAnalysis'].get('completedReview'):
+            review=report['periodAnalysis']['completedReview'];fc=review['stockFuturesCoverage']
+            report['findings'].append({'topic':'補齊資料後的比較範圍','fact':'檢查 '+str(sum(r['universe'] for r in review['aggregates']))+' 檔普通股；股期名錄 '+str(fc['rosterUnderlyings'])+' 檔標的，'+str(fc['tradedLatest'])+' 檔期末有成交，'+str(fc['sameContractEndpoints'])+' 檔可比較同契約起訖。','reading':'排除公司行動、缺基準與已到期部位，並按來源雜湊保留可重算證據。這次著重市場關係，沒有改變模擬交易策略。'})
+        else:
+            report['findings'].append({'topic':'免費補資料與到期研究','fact':'已加入本期上市櫃現股、法人、個股期貨逐日涵蓋與獨立 v2 到期結算研究。','reading':'缺成交價仍留白；v2 加入到期結算與明示費稅情境，與原 v1 分開，不代表實盤績效。'})
         if proof['status']!='available':report['status']='partial'
     return report
 
@@ -551,9 +573,12 @@ def html_document(report):
         [[s['label'],s['date'],s['baseDate'],str(s['days'])+'/'+str(s['expected']),s['status'],','.join(s['missingDates']),s['sha256']] for s in report['sources']]))
     parts.append('<h2>下一期觀察清單</h2>'+table(['訊號日','到期別','權別','履約價','規則','均量倍數','漲跌%','增減倉'],
         [[r['date'],r['month'],r['cp'],number(r['strike']),RULE_LABELS[r['rule']]]+[number(r[k]) for k in ['volumeMultiple','pricePct','oiChange']] for r in report['events']['watch']]))
+    parts.append('<p>依官方結算日排除已到期 '+str(report['events'].get('watchExcludedExpired',0))+' 筆下一期觀察訊號；原始歷史研究保留。</p>')
     parts.append('<p>完整結構化數據：<a href="'+escape(report['id'])+'.json">下載 JSON</a>；報告內容雜湊 <code>'+report['contentHash']+'</code></p>')
     parts.append('<h2>方法與限制</h2><ul>'+''.join('<li>'+escape(x)+'</li>' for x in report['limitations'])+'</ul>')
     parts.append('<h2>官方來源連結</h2><ul>'+''.join('<li><a href="'+escape(s['url'], quote=True)+'">'+escape(s['label'])+'</a></li>' for s in report['sources'] if str(s.get('url') or '').startswith('https://'))+'</ul>')
+    methods=report.get('periodAnalysis',{}).get('completedReview',{}).get('methodReferences',[])
+    parts.append('<ul>'+''.join('<li><a href="'+escape(s['url'],quote=True)+'">'+escape(s['label'])+'</a></li>' for s in methods if str(s.get('url','')).startswith('https://www.taifex.com.tw/'))+'</ul>')
     return '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(report['title'])+'</title><style>body{max-width:1100px;margin:24px auto;padding:0 16px;font:16px/1.6 system-ui;color:#14252e}h1{font-size:26px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}.table{overflow:auto}code{overflow-wrap:anywhere}@media print{table{font-size:10px}.table{overflow:visible}h2{break-after:avoid}tr{break-inside:avoid}}</style>'+''.join(parts)+'</html>'
 
 
