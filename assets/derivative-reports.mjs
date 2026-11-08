@@ -1,14 +1,14 @@
 import {esc,fmt,finite,taipeiTime} from './model.mjs';
 import {fcmAudit} from './market-history.mjs';
 
-const kinds={daily:'每日簡報',weekly:'每週完整分析',monthly:'每月策略檢討'};
+const kinds={daily:'每日簡報',weekly:'每週完整分析',monthly:'每月策略檢討',period:'10 月起完整期間分析'};
 const cp=v=>v==='C'?'買權':v==='P'?'賣權':'—';
 const n=(v,d=0)=>finite(v)?fmt(v,d):'—';
 const signed=(v,d=0)=>finite(v)?(v>0?'+':'')+fmt(v,d):'—';
 const pct=v=>finite(v)?signed(v,2)+'%':'—';
 const statuses={available:'可用',partial:'部分資料',retained:'沿用舊資料',unavailable:'尚無資料'};
 const categories={dealer:'交易商',assetManager:'資產管理機構',leveraged:'槓桿基金',other:'其他申報人',nonreportable:'非申報人'};
-export const validDerivativeReportId=id=>/^(daily|weekly|monthly)-\d{4}-\d{2}-\d{2}-r[1-9]\d*-[a-f0-9]{12}$/.test(id||'');
+export const validDerivativeReportId=id=>/^(daily|weekly|monthly|period)-\d{4}-\d{2}-\d{2}-r[1-9]\d*-[a-f0-9]{12}$/.test(id||'');
 export function reportChoices(index,kind,requested,archived=false){
   const items=(index?.items||[]).filter(i=>i.kind===kind&&validDerivativeReportId(i.id)&&(archived||i.archiveState==='current'||i.id===requested))
     .sort((a,b)=>b.periodEnd.localeCompare(a.periodEnd)||b.revision-a.revision);
@@ -23,6 +23,12 @@ export function eventRows(rows,{tr}){
 export function renderFcmMonthly(monthly,{table,tr}){
   if(!monthly)return '';
   return `<section class="panel fcm-monthly"><h2>官方期貨商完整月表分析</h2><p>${esc(monthly.month)}；${esc(monthly.note)}</p><p>按官方商品分類統計，個股期貨 STF、ETF 期貨 ETF 等為合併分類。經紀／自營代碼分列，不合併成金控；零成交商品的占比顯示「—」。</p>${table(['市場／商品','全月交易量（雙邊口）','有成交／收錄代碼','前五名占比','前三名代碼'],monthly.products.map(r=>tr([(r.market==='futures'?'期貨':'選擇權')+'／'+esc(r.contract),n(r.total),n(r.activeCodes)+'／'+n(r.codes),finite(r.top5Share)?n(r.top5Share,2)+'%':'—',r.leaders.map(x=>esc(x.name)+' '+n(x.volume)).join('<br>')])))}<p>${monthly.sources.map(s=>/^market-history\/fcm-monthly\/(futures|options)-\d{4}-\d{2}-[a-f0-9]{12}\.json\.gz$/.test(s.path)?`<a href="data/derivatives/${esc(s.path)}" download>下載${s.market==='futures'?'期貨':'選擇權'}完整月表（${n(s.rows)} 列，gzip JSON）</a>`:'').join(' · ')}</p><p class="notice warning">月表完整不代表逐日完整；逐日覆蓋與缺漏依下方來源表核對，月合計不拆分為日成交量。</p></section>`;
+}
+export function renderPeriod(analysis,{table,tr}){
+  if(!analysis)return '';
+  const charts=(analysis.charts||[]).filter(c=>/^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(c.image||'')).map(c=>`<figure style="margin:0;min-width:0"><h3>${esc(c.title)}</h3><img style="display:block;width:100%;max-width:420px" src="${esc(c.image)}" alt="${esc(c.title)}"><figcaption>${esc(c.note)}</figcaption></figure>`).join('');
+  return `<section class="panel period-scope"><h2>期間分析範圍</h2><p>${esc(analysis.start)}～${esc(analysis.end)}，${n(analysis.days)} 個台灣交易日；比較基準 ${esc(analysis.base)}。</p><p>${esc(analysis.scope)} 方法版本 ${esc(analysis.version)}。</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px">${charts}</div></section>`+
+    analysis.sections.map(s=>`<section class="panel period-analysis"><h2>${esc(s.title)}</h2><p>${esc(s.note)}</p>${table(s.headers,s.rows.map(r=>tr(r.map(esc))))}</section>`).join('');
 }
 export function renderDerivativeReport(r,{table,tr,metric}){
   const panels=r.panels||{}, panel=name=>panels[name]||{rows:[]};
@@ -45,6 +51,7 @@ export function renderDerivativeReport(r,{table,tr,metric}){
     <div class="metrics mobile-secondary" data-mobile-label="基準日與回測樣本">${metric('期間基準日',esc(r.baseDate),'台灣按核實交易日曆；缺基準就不計變化')}${metric('選擇權歷史日數',n(e.sessions),'資料至 '+esc(e.through||'尚無資料'))}${metric('到期先前訊號可評估',n(e.followup.evaluated)+'／'+n(e.followup.signals),'缺價與未到日不算零報酬')}</div>
     <p class="report-actions"><a class="text-link" href="data/derivatives/derivative-reports/${esc(r.id)}.html" target="_blank" rel="noopener">開啟完整報告／列印</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.html" download>下載 HTML</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.json" download>下載 JSON</a></p></section>
     ${renderFcmMonthly(r.fcmMonthly,{table,tr})}
+    ${renderPeriod(r.periodAnalysis,{table,tr})}
     <section class="panel"><h2>台灣期貨與選擇權法人部位</h2>${table(['商品／法人','資料日','多方未平倉','空方未平倉','淨部位（口）','較基準變化'],inst)}
     <p class="note">部位不同可能包含現股避險、套利與不同履約價；不能把買權與賣權口數直接相加當作多空曝險。</p></section>
     <section class="panel"><h2>期間逐日觀察</h2>${table(['日期','外資大台淨部位','投信大台淨部位','選擇權成交量','成交 P/C','未平倉 P/C'],r.timeline.map(x=>tr([

@@ -28,7 +28,7 @@ let manifest, generation = 0, exportRows = [], warrantChoices = [];
 const state = { page: 0, warrant: { active: true, minVolume: '', sort: 'volume' } };
 const pages = {
   'market-history': ['期權歷史與完整度', '全商品逐日資料、日夜盤、來源證據與缺漏清單；免費歷史補抓與每日累積。'],
-  'derivative-report': ['期貨與選擇權報告中心', '台美每日簡報、每週完整分析與每月策略檢討；按實際資料日期保存，缺漏、樣本與修訂可追溯。'],
+  'derivative-report': ['期貨與選擇權報告中心', '台美日／週／月報與 10 月起完整期間分析；按實際資料日期保存，缺漏、樣本與修訂可追溯。'],
   'stock-institutional': ['現股法人與權證觀察', '上市櫃法人買賣超、現股漲跌與權證放量，分市場核對同日資料。'],
   overview: ['市場總覽', '把行情、部位與交易熱度，放在同一個視野。'],
   'warrant-report': ['權證每日追蹤報告', '整合價量、分點持續買賣、發行條件與訊號後續觀察，逐日保存。'],

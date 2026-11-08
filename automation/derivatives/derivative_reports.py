@@ -23,7 +23,7 @@ else:
 
 VERSION = 'futures-options-reports-v1'
 ROOT = 'derivative-reports'
-KINDS = {'daily': '每日簡報', 'weekly': '每週完整分析', 'monthly': '每月策略檢討'}
+KINDS = {'daily': '每日簡報', 'weekly': '每週完整分析', 'monthly': '每月策略檢討', 'period':'10 月起完整期間分析'}
 RULES = {'version': VERSION, 'volumeMultiple': 2, 'minVolume': 100,
          'priceThresholdPct': 5, 'holdingSessions': 5, 'reviewDays': 90,
          'minEvaluated': 30, 'minSignalDates': 20, 'autoTune': False}
@@ -421,6 +421,13 @@ def build(output, obs, issues, kind, start, end):
         report['findings'].append({'topic':'期貨商整月交易熱度',
             'fact':p['month']+' 官方月表已收錄 '+str(len(p['products']))+' 個商品分類；日表覆蓋依下方各日來源核對。',
             'reading':'以各商品成交量與前五名代碼占比觀察集中度；經紀與自營各列一碼，未合併金控，也不能判斷買賣方向。'})
+    if kind == 'period':
+        if __package__:
+            from .derivative_period import build as period_analysis
+        else:
+            from derivative_period import build as period_analysis
+        report['periodAnalysis'] = period_analysis(output,report)
+        report['findings'] = report['periodAnalysis']['conclusions'] + report['findings']
     return report
 
 
@@ -467,6 +474,12 @@ def html_document(report):
              '<p>資料日期各自列示；本報告為盤後研究，無自動交易或策略改版。</p>']
     for f in report['findings']:
         parts.append('<h2>'+escape(f['topic'])+'</h2><p>'+escape(f['fact'])+'</p><p>'+escape(f['reading'])+'</p>')
+    if report.get('periodAnalysis'):
+        parts.append('<p>'+escape(report['periodAnalysis']['scope'])+'</p>')
+        for chart in report['periodAnalysis'].get('charts',[]):
+            parts.append('<figure style="display:inline-block;width:420px;max-width:100%;margin:8px 0"><h3>'+escape(chart['title'])+'</h3><img style="width:100%" alt="'+escape(chart['title'],quote=True)+'" src="'+escape(chart['image'],quote=True)+'"><figcaption>'+escape(chart['note'])+'</figcaption></figure>')
+        for section in report['periodAnalysis']['sections']:
+            parts.append('<h2>'+escape(section['title'])+'</h2><p>'+escape(section['note'])+'</p>'+table(section['headers'],section['rows']))
     if report.get('fcmSourceAudit'):
         audit=report['fcmSourceAudit']
         parts.append('<h2>期貨商免費來源與補抓驗證</h2><p>'+escape(audit['checkedAt']+'：'+audit['conclusion'])+'</p>'+table(
@@ -550,6 +563,8 @@ def run(output, kind, today, now=None):
     # those periods without creating a future scheduled report or overwriting a revision.
     previous_index = read(index_path, {})
     if kind == 'daily':
+        if previous_index.get('latest',{}).get('period'):
+            kinds.append('period')
         friday = today-timedelta(days=(today.weekday()-4) % 7)
         targets = {'weekly': friday.isoformat(), 'monthly': (today.replace(day=1)-timedelta(days=1)).isoformat()}
         for review_kind, end in targets.items():
@@ -587,6 +602,11 @@ def run(output, kind, today, now=None):
             elif selected == 'weekly':
                 friday = today-timedelta(days=(today.weekday()-4) % 7)
                 start, end = (friday-timedelta(days=4)).isoformat(), friday.isoformat()
+            elif selected == 'period':
+                start = '2026-10-01'
+                dates = [d for d in obs['feeds'].get('futures',{}) if start <= d <= today.isoformat()]
+                if not dates:raise ValueError('期間尚無台灣期貨資料')
+                end = max(dates)
             else:
                 last = today.replace(day=1)-timedelta(days=1)
                 start, end = last.replace(day=1).isoformat(), last.isoformat()
@@ -601,7 +621,7 @@ def run(output, kind, today, now=None):
         index['checks'][selected] = check
         index['status'] = 'retained' if any(c['status'] == 'retained' for c in index['checks'].values()) else 'ok'
         index['rulesVersion'] = VERSION
-        index['schedule'] = '日報於台美資料更新後檢查；週六產生週報，每月第一個週六產生上月月報；來源延遲保留日期，補齊另存修訂。'
+        index['schedule'] = '日報於台美資料更新後檢查；啟用後的 10 月起期間分析隨台灣最新交易日延伸；週六產生週報，每月第一個週六產生上月月報；來源延遲保留日期，補齊另存修訂。'
         save(index_path, index)
     return results, failures
 
@@ -609,7 +629,7 @@ def run(output, kind, today, now=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=Path, default=Path('data/derivatives'))
-    parser.add_argument('--kind', choices=['daily','weekly','monthly','auto','all','both'], default='daily')
+    parser.add_argument('--kind', choices=['daily','weekly','monthly','period','auto','all','both'], default='daily')
     parser.add_argument('--today', type=date.fromisoformat, default=datetime.now(timezone(timedelta(hours=8))).date())
     parser.add_argument('--rebuild-from', type=date.fromisoformat)
     args = parser.parse_args()
