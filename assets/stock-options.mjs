@@ -88,7 +88,7 @@ export function createStockOptions({load, table, tr, select, metric}) {
       <p>價格變動與價差變動皆比前一收錄日。每股收盤價差＝履約價＋買權成交價－賣權成交價－現股收盤價，採零利率、零淨股息基準。正值表示合成價格較高。</p>
       <p class="notice">${choices.length ? `目前列出 ${choices.length} 組契約；成交量或未平倉可單獨觀察，缺買權／賣權成交價仍無法計算價差。` : '本標的在目前條件沒有可用契約，請切換「成交與未平倉」或選其他標的。'}${!marketQuoted?' 全市場沒有可核對的三邊盤末報價，成本情境暫不開放。':''}</p>
       ${table(['到期別／履約價','買權收盤／變動','賣權收盤／變動','未平倉 C／P（口）','成交量 C／P（口）','收盤價差（元／股）','價差變動','賣合成報價差','買合成報價差'],choices.map(rowHtml))}
-      </section>${calc}<section class="panel source-list"><h2>資料範圍與結算</h2><p>只查期交所名單的台灣普通股標準契約、一般時段。上市現股優先取證交所同日收盤與最後揭示買賣價。缺少現股報表列時只查同日標的收盤歷史。缺價留白，結算價不代替成交價。歷史日期依目前可核對的標的清單整理。</p>
+      </section>${calc}<section class="panel source-list"><h2>資料範圍與結算</h2><p><a href="#market-completion">查詢個股期貨、官方到期結算、除權息與費稅 →</a></p><p>只查期交所名單的台灣普通股標準契約、一般時段。上市現股優先取證交所同日收盤與最後揭示買賣價。缺少現股報表列時只查同日標的收盤歷史。缺價留白，結算價不代替成交價。歷史日期依目前可核對的標的清單整理。</p>
       <p>股票選擇權為歐式現金結算，到期採現股最後 60 分鐘均價。盤末報價時間可能不同，缺少同步三邊報價、可成交數量、可借券數與結算均價避險成本，成本情境僅供盤後研究。</p>
       <p><a href="${esc(now.roster?.url || index.rosterUrl || 'https://openapi.taifex.com.tw/v1/SSOLists')}">期交所標的清單</a> · <a href="https://openapi.taifex.com.tw/v1/DailyMarketReportOpt">選擇權行情</a> · <a href="${esc(now.spotUrl)}">證交所同日行情</a> · <a href="https://www.taifex.com.tw/cht/2/sSO">交易及結算規格</a> · <a href="data/derivatives/stock-option-watch/${esc(day)}.json">本日觀察資料</a></p></section>`;
   }

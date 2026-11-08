@@ -52,6 +52,8 @@ export function renderDerivativeReport(r,{table,tr,metric}){
     <p class="report-actions"><a class="text-link" href="data/derivatives/derivative-reports/${esc(r.id)}.html" target="_blank" rel="noopener">開啟完整報告／列印</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.html" download>下載 HTML</a> · <a href="data/derivatives/derivative-reports/${esc(r.id)}.json" download>下載 JSON</a></p></section>
     ${renderFcmMonthly(r.fcmMonthly,{table,tr})}
     ${renderPeriod(r.periodAnalysis,{table,tr})}
+    ${(r.supplementSections||[]).map(s=>`<section class="panel"><h2>${esc(s.title)}</h2><p>${esc(s.note)}</p>${table(s.headers,s.rows.map(row=>tr(row.map(v=>v===null?'—':esc(v)))))}</section>`).join('')}
+    ${r.supplementSections?'<p><a href="#market-completion">逐檔查詢與成本情境 →</a></p>':''}
     <section class="panel"><h2>台灣期貨與選擇權法人部位</h2>${table(['商品／法人','資料日','多方未平倉','空方未平倉','淨部位（口）','較基準變化'],inst)}
     <p class="note">部位不同可能包含現股避險、套利與不同履約價；不能把買權與賣權口數直接相加當作多空曝險。</p></section>
     <section class="panel"><h2>期間逐日觀察</h2>${table(['日期','外資大台淨部位','投信大台淨部位','選擇權成交量','成交 P/C','未平倉 P/C'],r.timeline.map(x=>tr([

@@ -97,6 +97,16 @@ def expected_series(root):
                 if relative.is_absolute() or '..' in relative.parts or relative.parts[:2] != ('market-history','fcm-monthly'):
                     raise ValueError('Unsafe monthly archive path')
                 paths.append('data/derivatives/'+entry['path'])
+    completion = root/'data/derivatives/market-completion.json'
+    if completion.exists():
+        data=json.loads(completion.read_bytes())
+        paths.extend(['data/derivatives/market-completion.json','data/derivatives/market-supplement.json'])
+        entries=[data['references'],data['research']]+[r for r in data['stocks'] if r['code'] in ('2330','3008','6488','8069')]
+        for entry in entries:
+            relative=Path(entry['path'])
+            if relative.is_absolute() or '..' in relative.parts or relative.parts[0] not in ('market-completion','option-settlement-study'):
+                raise ValueError('Unsafe completion artifact path')
+            paths.append('data/derivatives/'+entry['path'])
     return {p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in paths}
 
 

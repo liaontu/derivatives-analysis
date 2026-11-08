@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 7462,
-      "sha256": "a0e4678a086701147488c1b0ba75a73a3c47be378c357fdfa4a2235e4f84bf58"
+      "bytes": 8176,
+      "sha256": "4de37102abd9d18ef08e2cf442adcc4377122424cd34220340022c85ae2e677c"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -43,13 +43,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 14773,
-      "sha256": "575578d05d47f95827fc0559421f56c2ace249cf3d2512aa1b9e967af8c04de7"
+      "bytes": 14983,
+      "sha256": "7e8bb4daa516d36e7e3fb28af6fbe0ba98af82522e26ed68a79b395fa7070b43"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 54813,
-      "sha256": "594ed80017265a750ec9a4fc803d34b5a26b08b5e71b5534d591b85d70a4458d"
+      "bytes": 55281,
+      "sha256": "3f198c985f7fde661ff7eea2deb855d8dfae5ea1b24bf25c4f4333e42789f23a"
     },
     {
       "path": "assets/branches.mjs",
@@ -73,8 +73,8 @@
     },
     {
       "path": "assets/derivative-reports.mjs",
-      "bytes": 16515,
-      "sha256": "2009a8e8255136a97a0c6088d70ae8ca3fe89bf49033a64f48a44faf2257956f"
+      "bytes": 16826,
+      "sha256": "41704d6b3c59c4d5600d43b79dff6e1b87a7fc0c9834c6acc691e7783be0caa7"
     },
     {
       "path": "assets/directory.mjs",
@@ -102,6 +102,11 @@
       "sha256": "c15516a608b865cf3e34cfda3d3f67a40c9029db3babe7cbdb1f6f866cd7758b"
     },
     {
+      "path": "assets/market-completion.mjs",
+      "bytes": 13202,
+      "sha256": "7c22534d30d63346cc0b9304574a98541a4e66b54d1a7e29ed9fcc2bba766b05"
+    },
+    {
       "path": "assets/market-history.mjs",
       "bytes": 7456,
       "sha256": "2905e30bdc0380434a91334c53238623de932c13eb313f17856eb0da6af71443"
@@ -123,8 +128,8 @@
     },
     {
       "path": "assets/pipeline-health.mjs",
-      "bytes": 4636,
-      "sha256": "2c72ad4f1de45e419fe843c800bae4ea901824624f5561e1f140bb56935852c6"
+      "bytes": 4751,
+      "sha256": "e612b0d5bcaccea75d674b68400dc7a14c2bc7d8011e0cb41c47f596b8680382"
     },
     {
       "path": "assets/report-evidence.mjs",
@@ -153,8 +158,8 @@
     },
     {
       "path": "assets/stock-options.mjs",
-      "bytes": 10481,
-      "sha256": "846653a71b2ddd4eef90ad394a80b885e559cd6ea77b7677bea90a94a0d8e222"
+      "bytes": 10585,
+      "sha256": "ca5f882e79683c22f9d98fc21ff8f7e4e94c5e4126539278ef8291668ba41c50"
     },
     {
       "path": "assets/styles.css",
@@ -208,8 +213,8 @@
     },
     {
       "path": "automation/derivatives/check_status.py",
-      "bytes": 6195,
-      "sha256": "6422c41a34a1f4842a27e97c42bc0cba5fa39e27e10271cb645cd5ba79cfc062"
+      "bytes": 6298,
+      "sha256": "9fbf57d83f6bffc0dd6d5d42ec94a98b009bf45558e8f3914f4d874794fd3940"
     },
     {
       "path": "automation/derivatives/cloud_recovery.py",
@@ -223,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/cross_market.py",
-      "bytes": 17206,
-      "sha256": "da5aca8da59e20b7aa1eba0883773ea79ad2ccbd078d4ca182bf7681c12dd8b0"
+      "bytes": 17209,
+      "sha256": "87cdccf32eceba8b0a3eea059cd9491209ebec059c4a88119f8114a9a4092eaf"
     },
     {
       "path": "automation/derivatives/daily_reports.py",
@@ -238,13 +243,13 @@
     },
     {
       "path": "automation/derivatives/derivative_reports.py",
-      "bytes": 44984,
-      "sha256": "3fba4acb2425388091dcdf0932a29eb8c206616ea3578b9ea4804c53120698ca"
+      "bytes": 45840,
+      "sha256": "523a28b3274b0ba10053bb5bcd63548787bf18b385ef40d12f9493a0dba103ec"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
-      "bytes": 8428,
-      "sha256": "152f601b5d959504094cb2d4c439163187902348175362523864ee0311f2d6fe"
+      "bytes": 9145,
+      "sha256": "e0822dc6e853c20498c2efcfe8176c9a477a01880169a0a862900da4e291ab72"
     },
     {
       "path": "automation/derivatives/fcm-source-audit.json",
@@ -277,6 +282,11 @@
       "sha256": "961b8e6cd47b7d14243a47bd81b2527cb0cdf08c18f06c9c6b9deb4b59d8d462"
     },
     {
+      "path": "automation/derivatives/market_completion.py",
+      "bytes": 15779,
+      "sha256": "d8f72d7445e8364e890a213788a54d45b8737babd4994f41bdc555765a0945c6"
+    },
+    {
       "path": "automation/derivatives/market_history.py",
       "bytes": 26821,
       "sha256": "ac0118894ca18d101ffc9d6ad6060f5d4f71822f26b578987088d6cea81d827e"
@@ -307,6 +317,11 @@
       "sha256": "5ea8a47fd59e8c4433d0e0fc75f0f9f3b453796357e177cf4c408ea60d342b37"
     },
     {
+      "path": "automation/derivatives/settlement_study.py",
+      "bytes": 6359,
+      "sha256": "f28378f8c705a8b0e49a3447bd86e35d0c90b411363c9b16623550cbf18e2e3d"
+    },
+    {
       "path": "automation/derivatives/stock_institutional.py",
       "bytes": 10330,
       "sha256": "af873bd177ae1f59e60feb030c5faf07f92e8717ac39391302491000450e746d"
@@ -320,6 +335,11 @@
       "path": "automation/derivatives/storage_health.py",
       "bytes": 2485,
       "sha256": "879106f8f61cec83f594548eb8e5c9997c8cb7f018cb96e2b535249bc4df5f8a"
+    },
+    {
+      "path": "automation/derivatives/supplement_sources.py",
+      "bytes": 17759,
+      "sha256": "5746ea0d937b41efa743bb2fef2738aec8ca3646a363c5ff03eda6728e0aab38"
     },
     {
       "path": "automation/derivatives/taiwan-calendar.json",
@@ -433,8 +453,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 4377,
-      "sha256": "899fd2295348813090abb67dadd7bf56727605df2288cbbc982fb2d14fc846c3"
+      "bytes": 4483,
+      "sha256": "535a28ba50a99c1793c287ed53f8e25c1882d6d8b2ebc5afbaf6fdbcc5423f54"
     }
   ]
 }

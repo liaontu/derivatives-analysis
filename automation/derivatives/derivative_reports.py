@@ -444,6 +444,16 @@ def build(output, obs, issues, kind, start, end):
                 'url':'https://www.twse.com.tw/zh/trading/historical/mi-index.html' if source_id=='cash-market' else 'https://www.twse.com.tw/zh/trading/foreign/t86.html',
                 'sha256':digest(evidence)})
         report['status']='partial' if cross['status']!='available' or any(s['status']!='available' for s in sources) else 'available'
+    if __package__:
+        from .market_completion import report_sections
+    else:
+        from market_completion import report_sections
+    sections,proof=report_sections(output,start,end)
+    if proof:
+        report['supplementSections']=sections
+        sources.append(proof)
+        report['findings'].append({'topic':'免費補資料與到期研究','fact':'已加入本期上市櫃現股、法人、個股期貨逐日涵蓋與獨立 v2 到期結算研究。','reading':'缺成交價仍留白；v2 加入到期結算與明示費稅情境，與原 v1 分開，不代表實盤績效。'})
+        if proof['status']!='available':report['status']='partial'
     return report
 
 
@@ -496,6 +506,8 @@ def html_document(report):
             parts.append('<figure style="display:inline-block;width:420px;max-width:100%;margin:8px 0"><h3>'+escape(chart['title'])+'</h3><img style="width:100%" alt="'+escape(chart['title'],quote=True)+'" src="'+escape(chart['image'],quote=True)+'"><figcaption>'+escape(chart['note'])+'</figcaption></figure>')
         for section in report['periodAnalysis']['sections']:
             parts.append('<h2>'+escape(section['title'])+'</h2><p>'+escape(section['note'])+'</p>'+table(section['headers'],section['rows']))
+    for section in report.get('supplementSections',[]):
+        parts.append('<h2>'+escape(section['title'])+'</h2><p>'+escape(section['note'])+'</p>'+table(section['headers'],section['rows']))
     if report.get('fcmSourceAudit'):
         audit=report['fcmSourceAudit']
         parts.append('<h2>期貨商免費來源與補抓驗證</h2><p>'+escape(audit['checkedAt']+'：'+audit['conclusion'])+'</p>'+table(
