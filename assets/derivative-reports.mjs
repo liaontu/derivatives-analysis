@@ -1,7 +1,7 @@
 import {esc,fmt,finite,taipeiTime} from './model.mjs';
 import {fcmAudit} from './market-history.mjs';
 
-const kinds={daily:'每日簡報',weekly:'每週完整分析',monthly:'每月策略檢討',period:'10 月起完整期間分析'};
+const kinds={daily:'每日簡報',weekly:'每週完整分析',monthly:'每月策略檢討',period:'三市場完整期間分析（10 月起）'};
 const cp=v=>v==='C'?'買權':v==='P'?'賣權':'—';
 const n=(v,d=0)=>finite(v)?fmt(v,d):'—';
 const signed=(v,d=0)=>finite(v)?(v>0?'+':'')+fmt(v,d):'—';

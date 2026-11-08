@@ -8,7 +8,7 @@ if __package__:
 else:
     import market_history as h
 
-VERSION='derivatives-period-v1'
+VERSION='derivatives-period-v2'
 
 
 def finite(x):
@@ -232,7 +232,19 @@ def build(output,report):
     charts=[chart('大台固定到期成交收盤',tx['prices'],'指數點') if tx else None,
             chart('外資大台淨未平倉',[{'date':r['date'],'value':r['foreignNetOi']} for r in daily],'口'),
             chart('臺指選擇權未平倉 P/C',[{'date':r['date'],'value':r['oiRatio']} for r in daily],'%')]
-    return {'version':VERSION,'start':start,'end':end,'base':base,'days':len(days),'futures':futures,
+    analysis={'version':VERSION,'start':start,'end':end,'base':base,'days':len(days),'futures':futures,
             'institutions':institutions,'options':option,'weeks':weeks,'fcm':fcm,'daily':daily,'usOptions':us,'sources':used,
             'sections':sections,'conclusions':conclusions,'charts':[c for c in charts if c],
             'scope':'以台灣資料作完整期間分析；美國另附既有 Cboe／CFE／CFTC 範圍，並非 CME 全行情或美股完整選擇權鏈。'}
+    if __package__:
+        from .cross_market import build as cross_market
+    else:
+        from cross_market import build as cross_market
+    cross=cross_market(output,analysis)
+    analysis['crossMarket']=cross
+    analysis['sections']=cross['sections']+analysis['sections']
+    analysis['conclusions']=cross['conclusions']+analysis['conclusions']
+    analysis['charts']=cross['charts']+analysis['charts']
+    analysis['sources']['cash-market']={d:e['sha256'] for d,e in cross['cashSources'].items()}
+    analysis['sources']['stock-institutional']={d:e['sha256'] for d,e in cross['institutionalSources'].items()}
+    return analysis

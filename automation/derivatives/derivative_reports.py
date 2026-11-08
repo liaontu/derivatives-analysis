@@ -426,8 +426,24 @@ def build(output, obs, issues, kind, start, end):
             from .derivative_period import build as period_analysis
         else:
             from derivative_period import build as period_analysis
+        report['title']='現股、期貨與選擇權完整期間分析'
         report['periodAnalysis'] = period_analysis(output,report)
         report['findings'] = report['periodAnalysis']['conclusions'] + report['findings']
+        cross=report['periodAnalysis']['crossMarket']
+        for source_id,label,dates,evidence,baseline_missing in [
+            ('cash-market','現股加權指數／成交／股票廣度',cross['cashSources'],cross['cashSources'],cross['baselineMissing']),
+            ('stock-institutional','個股法人（權證標的樣本）',cross['institutionalSources'],cross['institutionalSources'],False),
+        ]:
+            available=[d for d in expected if d in dates]
+            missing=[d for d in expected if d not in dates]
+            sources.append({'id':source_id,'label':label,'date':max(available) if available else None,
+                'baseDate':base if source_id=='cash-market' and not baseline_missing else None,
+                'days':len(available),'expected':len(expected),'missingDates':missing,
+                'status':'partial' if missing or baseline_missing else 'available',
+                'note':'來源已核對；現股價差非同步，法人為選樣個股且非全市場金額。'+('缺比較基準。' if baseline_missing else ''),
+                'url':'https://www.twse.com.tw/zh/trading/historical/mi-index.html' if source_id=='cash-market' else 'https://www.twse.com.tw/zh/trading/foreign/t86.html',
+                'sha256':digest(evidence)})
+        report['status']='partial' if cross['status']!='available' or any(s['status']!='available' for s in sources) else 'available'
     return report
 
 

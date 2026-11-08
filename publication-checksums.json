@@ -43,13 +43,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 14446,
-      "sha256": "fd28c6f100312399f48a68c8b3712896c061f8c174d74df77ff91ab6bd13d56f"
+      "bytes": 14773,
+      "sha256": "575578d05d47f95827fc0559421f56c2ace249cf3d2512aa1b9e967af8c04de7"
     },
     {
       "path": "assets/app.mjs",
-      "bytes": 54798,
-      "sha256": "98075505e0da97da0d7a362d987fafdcf1ef6b71d8b57f57babf0429078faf30"
+      "bytes": 54813,
+      "sha256": "594ed80017265a750ec9a4fc803d34b5a26b08b5e71b5534d591b85d70a4458d"
     },
     {
       "path": "assets/branches.mjs",
@@ -73,8 +73,8 @@
     },
     {
       "path": "assets/derivative-reports.mjs",
-      "bytes": 16500,
-      "sha256": "53b4d4c2eac250640cddb3d3b0d0bde7f9168600ad3c40cfc55095b345124539"
+      "bytes": 16515,
+      "sha256": "2009a8e8255136a97a0c6088d70ae8ca3fe89bf49033a64f48a44faf2257956f"
     },
     {
       "path": "assets/directory.mjs",
@@ -222,19 +222,24 @@
       "sha256": "549f63deb74a76a06dd56006dbe1abf9f26bfdc9bb4a3ef004b95d0936fda419"
     },
     {
+      "path": "automation/derivatives/cross_market.py",
+      "bytes": 17206,
+      "sha256": "da5aca8da59e20b7aa1eba0883773ea79ad2ccbd078d4ca182bf7681c12dd8b0"
+    },
+    {
       "path": "automation/derivatives/daily_reports.py",
       "bytes": 11454,
       "sha256": "30c6e6cac0b4e293a502ef824f85fbcc57ee3430c6357b037d4f1181ff181e9d"
     },
     {
       "path": "automation/derivatives/derivative_period.py",
-      "bytes": 21974,
-      "sha256": "fc020c084035729f798a1526214b68dca6f91a86e60bc6da9b728add8ce0327b"
+      "bytes": 22613,
+      "sha256": "20389f08cd9e645929c5555f15a6f7a5557ba4d9bf1f0bf50f0ebbbba240c7a7"
     },
     {
       "path": "automation/derivatives/derivative_reports.py",
-      "bytes": 43496,
-      "sha256": "1b21e3c47d183d3f7957e615964c32851987c28f18abed05c4b1727c1e89fb0a"
+      "bytes": 44984,
+      "sha256": "3fba4acb2425388091dcdf0932a29eb8c206616ea3578b9ea4804c53120698ca"
     },
     {
       "path": "automation/derivatives/ensure_pages.py",
