@@ -15,7 +15,7 @@ except ImportError:
 MASTER = {
     'listedCompanies': 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
     'otcCompanies': 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
-    'listedIssues': 'https://mopsfin.twse.com.tw/opendata/t187ap37_L.csv',
+    'listedIssues': 'https://openapi.twse.com.tw/v1/opendata/t187ap37_L',
     'otcIssues': 'https://mopsfin.twse.com.tw/opendata/t187ap37_O.csv',
 }
 FIELDS = ('listedDate','exerciseStart','lastTrade','expiry','strike','ratio','style',
@@ -106,7 +106,16 @@ def build(catalog, sources, raw, today):
             'quoteDates':sorted({r['date'] for rows in groups.values() for r in rows}),'fieldCounts':dict(coverage),
             'volumeCounts':dict(trade),'issueMatches':sum(bool(r['issueDateOfReport']) for rows in groups.values() for r in rows)}, groups
 
-def publish(out,today=None,fetcher=c.fetch):
+def fetch_directory(url):
+    # The official JSON has the same dated fields as the large MOPS CSV.
+    # Its verbose keys made the verified 2026-11-12 response about 45 MB;
+    # keep an explicit bound for this endpoint without relaxing other feeds.
+    if url == MASTER['listedIssues']:
+        return c.request_bytes(url, c.decode, max_bytes=80_000_000)
+    return c.fetch(url)
+
+
+def publish(out,today=None,fetcher=fetch_directory):
     today=today or datetime.now(timezone(timedelta(hours=8))).date()
     index=out/'stock-warrant-directory.json';old=c.read(index) or {}
     try:
@@ -115,7 +124,7 @@ def publish(out,today=None,fetcher=c.fetch):
         feeds={s['id']:s for s in manifest.get('sources',[])}
         ids=('twse-warrants','tpex-terms','tpex-warrants','twse-volume','twse-volume-put')
         if any(feeds.get(k,{}).get('status')!='ok' for k in ids):raise ValueError('official market sources not all available')
-        basis=digest(['mops-extra-volume-v2',[(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids],
+        basis=digest(['official-extra-volume-v3',MASTER,[(k,feeds[k]['date'],feeds[k]['provenance']['sha256']) for k in ids],
                       feeds.get('twse-volume-extra',{}).get('provenance',{}).get('sha256')])
         if old.get('status')=='ok' and old.get('checkedDay')==today.isoformat() and old.get('basis')==basis:return True
         sources={k:{**(c.read(out/(k+'.json')) or {}),'status':feeds[k]['status']} for k in ('twse-warrants','tpex-terms')}

@@ -23,8 +23,8 @@
     },
     {
       "path": ".github/workflows/warrant-branches-batch.yml",
-      "bytes": 5889,
-      "sha256": "36dc54a89b16b843024dd3ee0845d7742a161999584a0a9f9ad67a2d3f7a84cc"
+      "bytes": 5999,
+      "sha256": "83c123e116cfdf1d52da4a5bb9fa45d5a517a93651c8f13027274b223eb837cd"
     },
     {
       "path": ".github/workflows/warrant-branches-daily.yml",
@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/collect.py",
-      "bytes": 26672,
-      "sha256": "9e91708e8b371a7e93cfca3f5e52d02f551eff3a92f6e35fec266a1316e3502c"
+      "bytes": 26699,
+      "sha256": "ce0d8dad50afe1beda9fd58f9865d80768ec6b7a70a1628189de767c22d352cd"
     },
     {
       "path": "automation/derivatives/cross_market.py",
@@ -383,8 +383,8 @@
     },
     {
       "path": "automation/derivatives/update_health.py",
-      "bytes": 5688,
-      "sha256": "690eaa0fee2737624bca3c85c3d3e74bee92fb0aaf24a1b4bf2be47a5046d654"
+      "bytes": 5693,
+      "sha256": "a8de477ca1ab00441bca5d312f516746025aec99be7db9aab7c9aa2cac4400db"
     },
     {
       "path": "automation/derivatives/us_sources.py",
@@ -408,8 +408,8 @@
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 11042,
-      "sha256": "0b8d1a7e7badd8141df325d7c6348d11f713140c151f825ccd632d30926defcc"
+      "bytes": 11442,
+      "sha256": "2a662b48aa43160f2ea8ea15e27545f9ead1fc4f90d6499624376e325482f2b8"
     },
     {
       "path": "automation/derivatives/warrant_extra_history.py",

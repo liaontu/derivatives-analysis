@@ -117,7 +117,7 @@ def decode(raw):
     return [{ALIASES.get(k, k): v for k, v in row.items()} for row in rows]
 
 
-def request_bytes(url, transform=lambda raw: raw):
+def request_bytes(url, transform=lambda raw: raw, *, max_bytes=40_000_000):
     request = urllib.request.Request(url, headers={
         "User-Agent": "DerivativeInsight/2.1 (daily public market research)",
         "Accept": "application/json,text/csv,text/html;q=0.9,*/*;q=0.5",
@@ -125,8 +125,8 @@ def request_bytes(url, transform=lambda raw: raw):
     for attempt in range(3):
         try:
             with urllib.request.urlopen(request, timeout=40) as response:
-                raw = response.read(40_000_001)
-            if len(raw) > 40_000_000:
+                raw = response.read(max_bytes + 1)
+            if len(raw) > max_bytes:
                 raise ValueError("Response exceeds size limit")
             return transform(raw)
         except Exception:
