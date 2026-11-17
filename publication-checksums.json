@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/collect.py",
-      "bytes": 27026,
-      "sha256": "d636c6db811dba7220a8456053e262a7eb9ef46ee79cc24ec3f358da77d05808"
+      "bytes": 28950,
+      "sha256": "cccadca0b97a9b719e6ec8a77b0f084ec44a1d31eaf2b9c7f4d630bf06151b7a"
     },
     {
       "path": "automation/derivatives/cross_market.py",
@@ -490,6 +490,11 @@
       "path": "index.html",
       "bytes": 4483,
       "sha256": "535a28ba50a99c1793c287ed53f8e25c1882d6d8b2ebc5afbaf6fdbcc5423f54"
+    },
+    {
+      "path": "automation/derivatives/dated_latest.py",
+      "bytes": 4739,
+      "sha256": "16d8528b0f0fef4f2e4b5c7a65261bdb6c725648483a8576f5e700398b033f3e"
     }
   ]
 }

@@ -318,6 +318,10 @@ def stamp(payload, previous, now):
 
 def update_feed(name, old, raw, now, today, calendar=None):
     rows = normalize(name, raw)
+    return update_rows(name, old, rows, now, today, calendar)
+
+
+def update_rows(name, old, rows, now, today, calendar=None):
     latest, current = validate(name, rows, today, calendar)
     if old and old.get("date") and latest < old["date"]:
         raise ValueError("Source regressed to an earlier date")
@@ -353,12 +357,22 @@ def combine_warrants(feeds):
     return result
 
 
-def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
+def collect(output, fetcher=fetch, now=None, calendar_fetcher=None, dated_fallback=False):
     now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
     today = datetime.fromisoformat(now).astimezone(timezone(timedelta(hours=8))).date()
     output.mkdir(parents=True, exist_ok=True)
     WRITTEN.clear()
     calendar, calendar_status = calendar_for_run(output, today.year, save, calendar_fetcher)
+    dated = None
+    if dated_fallback:
+        if __package__:
+            from .dated_latest import DatedFallback, NAMES
+        else:
+            from dated_latest import DatedFallback, NAMES
+        try:
+            dated = DatedFallback(output, now, calendar)
+        except ValueError as exc:
+            print(json.dumps({'datedFallback':'disabled','error':str(exc)}))
     old_manifest = read(output / "manifest.json") or {}
     feeds, statuses, errors = {}, [], []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
@@ -367,8 +381,27 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
             path = output / f"{name}.json"
             old = read(path)
             error = None
+            source_url, dated_check, dated_proof = url, None, None
             try:
-                payload = update_feed(name, old, tasks[name].result(), now, today, calendar)
+                primary_error = None
+                try:
+                    payload = update_feed(name, old, tasks[name].result(), now, today, calendar)
+                except Exception as exc:
+                    primary_error, payload = exc, None
+                if dated and name in NAMES and (payload is None or payload['date'] < dated.day):
+                    try:
+                        rows, proof = dated.load(name, feeds)
+                        candidate = update_rows(name, payload or old, rows, now, today, calendar)
+                        dated.client.accept(proof)
+                        payload = candidate
+                        source_url, dated_proof = proof['url'], proof
+                        dated_check = {'requestedDate':dated.day,'status':'verified','url':source_url}
+                    except Exception as exc:
+                        dated_check = {'requestedDate':dated.day,'status':'unavailable','error':str(exc)[:220]}
+                        if payload is None:
+                            raise ValueError(str(primary_error) + '; dated fallback: ' + str(exc)) from exc
+                if payload is None:
+                    raise primary_error
                 if name == 'tpex-underlyings':
                     underlyings = {r.get('underlying') for n in ('tpex-terms', 'twse-warrants') for r in feeds.get(n, {}).get('rows', [])}
                     payload['rows'] = [r for r in payload['rows'] if r['code'] in underlyings]
@@ -380,9 +413,11 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
                 # Identical content keeps its first fetch time and provenance, so a published file only changes with the data.
                 if old and all(old.get(k) == payload[k] for k in ("date", "rows", "history")):
                     payload["fetchedAt"] = old.get("fetchedAt") or now
-                    payload["provenance"] = old.get("provenance") or provenance(payload, None, url)
+                    payload["provenance"] = old.get("provenance") or provenance(payload, None, source_url)
                 else:
-                    payload["provenance"] = provenance(payload, old, url)
+                    payload["provenance"] = provenance(payload, old, source_url)
+                    if dated_proof:
+                        payload['provenance']['rawEvidence'] = dated_proof
                 status = "ok"
             except Exception as exc:
                 error = str(exc)[:220]
@@ -394,10 +429,12 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None):
             if not error or not path.exists():
                 save(path, stored)
             feeds[name] = {**stored, "status": status, "error": error}
-            statuses.append({"id": name, "label": label, "url": url, "date": stored["date"],
+            statuses.append({"id": name, "label": label, "url": source_url, "date": stored["date"],
                              "status": status, "fetchedAt": stored.get("fetchedAt"), "count": len(stored["rows"]), "error": error,
                              "region": "US" if name in US_FEEDS else "TW", "frequency": "weekly" if name in COT_DATASETS else "daily",
                              "staleAfterDays": 14 if name in COT_DATASETS else 4, "provenance": stored.get("provenance")})
+            if dated_check:
+                statuses[-1]['datedFallback'] = dated_check
             if name not in US_FEEDS:
                 statuses[-1].update(staleAfterTradingDays=4, freshnessBasis='TW trading days')
             print(json.dumps({"feed": name, "date": stored["date"], "status": status, "count": len(stored["rows"]), "error": error}, ensure_ascii=False))
@@ -450,4 +487,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("data/derivatives"))
     args = parser.parse_args()
-    raise SystemExit(1 if collect(args.output, calendar_fetcher=fetch_json) else 0)
+    raise SystemExit(1 if collect(args.output, calendar_fetcher=fetch_json, dated_fallback=True) else 0)
