@@ -138,9 +138,21 @@ def adjusted_contracts(raw):
 
 
 def fees(raw):
-    rows=records(raw,{'商品','交易經手費','結算手續費','交割手續費','期貨交易稅比率'})
+    required={'商品','交易經手費','結算手續費','交割手續費','期貨交易稅比率'}
+    aliases={'Contract':'商品','TransactionFee':'交易經手費','ClearingFee':'結算手續費',
+             'SettlementFee':'交割手續費','FuturesTransactionTaxRate':'期貨交易稅比率'}
     # Preserve text such as product-specific rules; never guess a numeric rate.
-    return [{k:str(v).strip() for k,v in r.items()} for r in rows]
+    result=[]
+    for row in records(raw,set()):
+        normalized={}
+        for key,value in row.items():
+            field=aliases.get(key,key);value=str(value).strip()
+            if field in normalized and normalized[field]!=value:
+                raise ValueError('Conflicting official fee columns')
+            normalized[field]=value
+        if not required<=set(normalized):raise ValueError('Official table schema changed')
+        result.append(normalized)
+    return result
 
 
 def companies(raw,market):

@@ -14,7 +14,7 @@
     {
       "path": ".github/workflows/derivatives-daily.yml",
       "bytes": 8892,
-      "sha256": "a95c65030f24a70ab66a5ac7c4d24a0386a906ba68d92449ce3bfc86ab696444"
+      "sha256": "6b5582dbbbe3ee2ceb9d6b0f9bba3f7359cc424f945558a233a9bddbfbd78972"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/collect.py",
-      "bytes": 26699,
-      "sha256": "ce0d8dad50afe1beda9fd58f9865d80768ec6b7a70a1628189de767c22d352cd"
+      "bytes": 27026,
+      "sha256": "d636c6db811dba7220a8456053e262a7eb9ef46ee79cc24ec3f358da77d05808"
     },
     {
       "path": "automation/derivatives/cross_market.py",
@@ -363,8 +363,8 @@
     },
     {
       "path": "automation/derivatives/supplement_sources.py",
-      "bytes": 18173,
-      "sha256": "d6292bc9aa1cfea0f40ea025b284535f823801e56b1a77740d440f7c52bc3f68"
+      "bytes": 18784,
+      "sha256": "04dee287e434c08e83955271c716e91a993a26a2ca5f486ebd0b27d6e3fa5f59"
     },
     {
       "path": "automation/derivatives/taiwan-calendar.json",
