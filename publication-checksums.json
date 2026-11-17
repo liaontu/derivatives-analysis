@@ -363,8 +363,8 @@
     },
     {
       "path": "automation/derivatives/supplement_sources.py",
-      "bytes": 18784,
-      "sha256": "04dee287e434c08e83955271c716e91a993a26a2ca5f486ebd0b27d6e3fa5f59"
+      "bytes": 19166,
+      "sha256": "d7b94c07d0bf7672f55d2a88f043f3567b5cd7311c6655ca0e0c987371096369"
     },
     {
       "path": "automation/derivatives/taiwan-calendar.json",

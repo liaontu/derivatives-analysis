@@ -144,14 +144,19 @@ def fees(raw):
     # Preserve text such as product-specific rules; never guess a numeric rate.
     result=[]
     for row in records(raw,set()):
+        # The official JSON ends with blank Contract-only padding records.
+        # Ignore only entirely blank records; a named product still needs all fields.
+        if row and all(isinstance(value,str) and not value.strip() for value in row.values()):
+            continue
         normalized={}
         for key,value in row.items():
             field=aliases.get(key,key);value=str(value).strip()
             if field in normalized and normalized[field]!=value:
                 raise ValueError('Conflicting official fee columns')
             normalized[field]=value
-        if not required<=set(normalized):raise ValueError('Official table schema changed')
+        if not required<=set(normalized) or not normalized['商品']:raise ValueError('Official table schema changed')
         result.append(normalized)
+    if not result:raise ValueError('Expected a nonempty official fee table')
     return result
 
 
