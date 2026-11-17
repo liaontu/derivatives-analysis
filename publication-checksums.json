@@ -298,8 +298,8 @@
     },
     {
       "path": "automation/derivatives/market_history.py",
-      "bytes": 26821,
-      "sha256": "ac0118894ca18d101ffc9d6ad6060f5d4f71822f26b578987088d6cea81d827e"
+      "bytes": 27112,
+      "sha256": "78c22de02f648449516b2c74165434433886d8843bff1fd713fb72f40ce1bcf2"
     },
     {
       "path": "automation/derivatives/option_history.py",

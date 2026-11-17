@@ -274,8 +274,11 @@ def download_tw(output, index, client, start, end, max_windows=None):
 
 def download_us(output,index,client,start,end,max_days=None):
     count=0
+    # Taiwan's new session can be complete while the US session is still open.
+    # Each US source's validated live snapshot bounds historical requests.
+    cutoffs={name:read(output/(name+'.json'),{}).get('date') for name in ('us-options','us-futures')}
     for day in expected_days(output,'us-options',start,end) or []:
-        needed=[n for n in ('us-options','us-futures') if day not in index['feeds'].get(n,{})]
+        needed=[n for n in ('us-options','us-futures') if cutoffs[n] and day<=cutoffs[n] and day not in index['feeds'].get(n,{})]
         if not needed: continue
         if max_days is not None and count>=max_days: break
         for name in needed:
