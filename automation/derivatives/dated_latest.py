@@ -57,6 +57,10 @@ class DatedFallback:
         if self.blocked:
             raise ValueError('Dated sources stopped after access/rate-limit response')
         day = self.day
+        # Current-day downloads can be republished during the afternoon. A
+        # midnight cache cutoff would keep a valid morning file with yesterday's
+        # rows and prevent every later run from seeing the new session.
+        fresh_after = datetime.fromisoformat(self.now).astimezone(timezone.utc).isoformat(timespec='seconds')
         try:
             if name == 'tpex-warrants':
                 if __package__:
@@ -64,7 +68,7 @@ class DatedFallback:
                 else:
                     from backfill_volume_reports import OTC_URL, otc_quotes
                 url = OTC_URL + urlencode({'date':day.replace('-','/'),'type':'Daily','response':'json'})
-                raw, proof = self.client.get(url, fresh_after=self.now[:10])
+                raw, proof = self.client.get(url, fresh_after=fresh_after)
                 document = json.loads(raw)
                 for table in document.get('tables',[]):
                     if any(len(r)!=len(table.get('fields',[])) for r in table.get('data',[])):
@@ -76,11 +80,11 @@ class DatedFallback:
                 route, extra = history.DOWNLOADS[name]
                 url = 'https://www.taifex.com.tw/cht/3/' + route
                 fields = {**extra,'queryStartDate':day.replace('-','/'),'queryEndDate':day.replace('-','/')}
-                raw, proof = self.client.get(url, fields, self.now[:10])
+                raw, proof = self.client.get(url, fields, fresh_after)
                 rows = history.parse_csv(name, raw, day, day)
             elif name.endswith('-fcm'):
                 url = fcm_history.sources(name)[0][1]
-                raw, proof = self.client.get(url, fresh_after=self.now[:10])
+                raw, proof = self.client.get(url, fresh_after=fresh_after)
                 source_rows = fcm_history.parse(raw)
                 rows = [r for r in source_rows if r['date'] == day]
                 if not rows:
@@ -99,7 +103,7 @@ class DatedFallback:
                     raise ValueError('FCM volume does not match same-day official quote total')
                 proof = {**proof,'validation':{'contract':fcm_contract,'twoSidedQuoteVolume':expected,'matched':True}}
             else:
-                raw, proof = self.client.get(PCR_URL, fresh_after=self.now[:10])
+                raw, proof = self.client.get(PCR_URL, fresh_after=fresh_after)
                 rows = parse_pcr(raw, day)
             if not rows or any(r.get('date') != day for r in rows):
                 raise ValueError('Dated source does not match requested session')

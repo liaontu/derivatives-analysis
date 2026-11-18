@@ -71,16 +71,6 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/supplement_sources.py
-      - name: Match full ordinary-stock universe and recompute expiry-aware study
-        id: market_completion
-        if: steps.gate.outputs.run == 'true'
-        continue-on-error: true
-        run: python automation/derivatives/market_completion.py
-      - name: Repair missing underlying closes from dated official cash tables
-        id: stock_history_repair
-        if: steps.gate.outputs.run == 'true'
-        continue-on-error: true
-        run: python automation/derivatives/stock_history_repair.py
       - name: Archive warrant volume and futures/options positioning reports
         id: reports
         if: steps.gate.outputs.run == 'true'
@@ -101,6 +91,17 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: python automation/derivatives/institutional_history.py --max-days 2
+      # Completion consumes today's stock-institutional snapshot and its archive.
+      - name: Match full ordinary-stock universe and recompute expiry-aware study
+        id: market_completion
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/market_completion.py
+      - name: Repair missing underlying closes from dated official cash tables
+        id: stock_history_repair
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python automation/derivatives/stock_history_repair.py
       - name: Update institutional trends and dated stock warrant event study
         id: institutional_research
         if: steps.gate.outputs.run == 'true'

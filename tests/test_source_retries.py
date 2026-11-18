@@ -110,3 +110,28 @@ def test_dated_otc_quotes_do_not_fabricate_terms_or_accept_wrong_day(tmp_path):
     assert 'strike' not in rows[0] and 'termsDate' not in rows[0] and '2026%2F11%2F18' in proof['url']
     doc['date']='20261117'
     with pytest.raises(ValueError,match='date/status'):fallback.load('tpex-warrants',{})
+
+
+def test_afternoon_fcm_reloads_validated_morning_cache(tmp_path,monkeypatch):
+    from automation.derivatives import fcm_history
+    url=fcm_history.sources('options-fcm')[0][1]
+    client=market_history.Client(tmp_path)
+    import hashlib
+    morning=b'morning-previous-session';sha=hashlib.sha256(morning).hexdigest()
+    proof={'url':url,'parameters':None,'fetchedAt':'2026-11-18T02:00:00+00:00','sha256':sha,'path':f'market-history/sources/{sha}.raw.gz'}
+    market_history.write_gzip(tmp_path/proof['path'],morning);client.accept(proof)
+    calls=[]
+    def download(request,**kwargs):
+        calls.append(request.full_url);response=BytesIO(b'afternoon-current-session')
+        response.headers={};response.status=200;return response
+    monkeypatch.setattr(market_history,'urlopen',download)
+    monkeypatch.setattr(market_history.time,'sleep',lambda _:None)
+    def parse(raw):
+        assert raw==b'afternoon-current-session'
+        return [{'date':'2026-11-18','contract':'TXO','volume':30}]
+    monkeypatch.setattr(fcm_history,'parse',parse)
+    fallback=object.__new__(dated_latest.DatedFallback)
+    fallback.client=client;fallback.day='2026-11-18';fallback.now='2026-11-18T17:00:00+08:00';fallback.blocked=False
+    quotes={'options':{'date':'2026-11-18','rows':[{'contract':'TXO','month':'202611','session':'一般','volume':10},{'contract':'TXO','month':'202611','session':'盤後','volume':5}]}}
+    rows,evidence=fallback.load('options-fcm',quotes)
+    assert calls==[url] and len(rows)==1 and evidence['validation']['matched'] is True
