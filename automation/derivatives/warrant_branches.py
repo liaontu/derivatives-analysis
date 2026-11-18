@@ -314,9 +314,13 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             if not robots.can_fetch(AGENT, source_url(code)):
                 raise ValueError('Source disallows collection')
             version = {'date': quote['date'], 'volume': quote.get('volume')}
-            # A valid source can lag the official quote day. Reuse that completed
-            # fetch within this continuation; changing quote versions still refetches.
-            if (code in completed or completed_for.get(code) == version) and old and old.get('status') == 'ok' and calendar.fresh(old.get('date'), today):
+            # A continuation reuses work already attempted in its workflow. A new
+            # run must retry lagging rankings even when the quote is unchanged:
+            # the broker may have published today's rankings since the first run.
+            if ((code in completed or completed_for.get(code) == version)
+                    and old and old.get('status') == 'ok'
+                    and calendar.fresh(old.get('date'), today)
+                    and (continuation or old['date'] >= quote['date'])):
                 payload = old
             else:
                 if continuation and code in failures:
