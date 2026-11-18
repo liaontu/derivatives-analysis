@@ -16,7 +16,9 @@ MASTER = {
     'listedCompanies': 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
     'otcCompanies': 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
     'listedIssues': 'https://openapi.twse.com.tw/v1/opendata/t187ap37_L',
-    'otcIssues': 'https://mopsfin.twse.com.tw/opendata/t187ap37_O.csv',
+    # Official TPEx OpenAPI; 18,406 rows / all nine consumed fields matched
+    # the MOPS CSV for 2026-11-17. Avoid the intermittently slow CSV route.
+    'otcIssues': 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap37_O',
 }
 FIELDS = ('listedDate','exerciseStart','lastTrade','expiry','strike','ratio','style',
           'reportedIssueK','initialIssueK','addedK','cancelledK','originalStrike','kind','quoteMethod',
