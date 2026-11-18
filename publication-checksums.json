@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/collect.py",
-      "bytes": 30370,
-      "sha256": "67582160a84b34f637aeea436a9f5bae61da3ca5ca3d72add1223d9a8797b432"
+      "bytes": 31187,
+      "sha256": "649e03b93642f92c3ec7199b9a7bef5f153142b339c3c250597b775765119aea"
     },
     {
       "path": "automation/derivatives/cross_market.py",

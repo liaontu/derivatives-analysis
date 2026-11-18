@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
+import gzip
 import io
 import json
 import math
@@ -120,20 +121,38 @@ def decode(raw):
     return [{ALIASES.get(k, k): v for k, v in row.items()} for row in rows]
 
 
+def read_response(response, max_bytes, deadline):
+    encoding = response.headers.get('Content-Encoding', 'identity').lower().strip()
+    if encoding not in ('gzip', 'identity', ''):
+        raise ValueError('Unsupported response encoding')
+    reader = gzip.GzipFile(fileobj=response) if encoding == 'gzip' else response
+    parts, size = [], 0
+    while True:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Public source total download deadline exceeded')
+        chunk = reader.read1(min(65536, max_bytes + 1 - size))
+        if not chunk:
+            break
+        parts.append(chunk); size += len(chunk)
+        if size > max_bytes:
+            raise ValueError('Response exceeds size limit')
+    return b''.join(parts)
+
+
 def request_bytes(url, transform=lambda raw: raw, *, max_bytes=40_000_000):
     request = urllib.request.Request(url, headers={
         "User-Agent": "DerivativeInsight/2.1 (daily public market research)",
         "Accept": "application/json,text/csv,text/html;q=0.9,*/*;q=0.5",
+        "Accept-Encoding": "gzip",
     })
     for attempt in range(3):
         try:
+            deadline = time.monotonic() + 120
             with urllib.request.urlopen(request, timeout=40) as response:
-                raw = response.read(max_bytes + 1)
-            if len(raw) > max_bytes:
-                raise ValueError("Response exceeds size limit")
+                raw = read_response(response, max_bytes, deadline)
             return transform(raw)
-        except Exception:
-            if attempt == 2:
+        except Exception as exc:
+            if getattr(exc, 'code', None) in (401, 403, 429) or attempt == 2:
                 raise
             time.sleep(2 * (attempt + 1))
 

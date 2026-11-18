@@ -1,6 +1,8 @@
 from contextlib import nullcontext
 from datetime import date
 from io import BytesIO
+import gzip
+import time
 from urllib.error import HTTPError
 import pytest
 from automation.derivatives import collect, option_history
@@ -49,3 +51,19 @@ def test_volume_recovery_requires_exact_verified_quote_day():
         collect.dated_warrant_volume('twse-volume-extra',None,{'twse-warrants':{'date':'2026-11-17','status':'retained'}},fetch,'now',date(2026,11,18),None)
     with pytest.raises(ValueError,match='columns changed'):
         collect.dated_warrant_volume('twse-volume-extra',None,feeds,lambda _:{'stat':'OK','date':'20261117','tables':[]},'now',date(2026,11,18),None)
+
+
+def test_compressed_large_source_checks_decompressed_size():
+    raw=b'official public report'*5000
+    response=BytesIO(gzip.compress(raw));response.headers={'Content-Encoding':'gzip'}
+    assert collect.read_response(response,len(raw),time.monotonic()+10)==raw
+    response=BytesIO(gzip.compress(raw));response.headers={'Content-Encoding':'gzip'}
+    with pytest.raises(ValueError,match='size limit'):
+        collect.read_response(response,len(raw)-1,time.monotonic()+10)
+
+
+def test_slow_trickle_source_cannot_exceed_total_download_budget(monkeypatch):
+    ticks=iter([0,121]);monkeypatch.setattr(collect.time,'monotonic',lambda:next(ticks))
+    response=BytesIO(b'x'*100000);response.headers={}
+    with pytest.raises(TimeoutError,match='total download deadline'):
+        collect.read_response(response,200000,120)
