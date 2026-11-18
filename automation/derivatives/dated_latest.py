@@ -1,13 +1,15 @@
 """Bounded official dated fallback when TAIFEX OpenAPI lags a closed session."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+import json
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 
 if __package__:
     from . import market_history as history, fcm_history, supplement_sources
 else:
     import market_history as history, fcm_history, supplement_sources
 
-NAMES = (*history.DOWNLOADS, 'futures-fcm', 'options-fcm', 'pcr')
+NAMES = (*history.DOWNLOADS, 'futures-fcm', 'options-fcm', 'pcr', 'tpex-warrants')
 PCR_URL = 'https://www.taifex.com.tw/cht/3/pcRatio'
 PCR_FIELDS = ['日期','賣權成交量','買權成交量','買賣權成交量比率%',
               '賣權未平倉量','買權未平倉量','買賣權未平倉量比率%']
@@ -56,7 +58,21 @@ class DatedFallback:
             raise ValueError('Dated sources stopped after access/rate-limit response')
         day = self.day
         try:
-            if name in history.DOWNLOADS:
+            if name == 'tpex-warrants':
+                if __package__:
+                    from .backfill_volume_reports import OTC_URL, otc_quotes
+                else:
+                    from backfill_volume_reports import OTC_URL, otc_quotes
+                url = OTC_URL + urlencode({'date':day.replace('-','/'),'type':'Daily','response':'json'})
+                raw, proof = self.client.get(url, fresh_after=self.now[:10])
+                document = json.loads(raw)
+                for table in document.get('tables',[]):
+                    if any(len(r)!=len(table.get('fields',[])) for r in table.get('data',[])):
+                        raise ValueError('OTC daily price row width mismatch')
+                rows = otc_quotes(document, date.fromisoformat(day))
+                # Dated quotes do not provide contract terms. Keep their original
+                # dates; downstream reports still require same-day terms.
+            elif name in history.DOWNLOADS:
                 route, extra = history.DOWNLOADS[name]
                 url = 'https://www.taifex.com.tw/cht/3/' + route
                 fields = {**extra,'queryStartDate':day.replace('-','/'),'queryEndDate':day.replace('-','/')}
@@ -65,7 +81,10 @@ class DatedFallback:
             elif name.endswith('-fcm'):
                 url = fcm_history.sources(name)[0][1]
                 raw, proof = self.client.get(url, fresh_after=self.now[:10])
-                rows = [r for r in fcm_history.parse(raw) if r['date'] == day]
+                source_rows = fcm_history.parse(raw)
+                rows = [r for r in source_rows if r['date'] == day]
+                if not rows:
+                    raise ValueError('Requested FCM day not yet published; latest source date: '+max(r['date'] for r in source_rows))
                 kind = name.removesuffix('-fcm')
                 quotes = feeds.get(kind, {})
                 if quotes.get('date') != day:

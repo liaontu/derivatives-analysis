@@ -17,15 +17,15 @@ import subprocess
 import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 if __package__:
-    from .collect import number, iso_date, cp, FEEDS
+    from .collect import number, iso_date, cp, FEEDS, read_response
     from .us_sources import US_FEEDS, COT_DATASETS, options_document, normalize_us
     from .publication import save_text
     from .trading_calendar import load_calendar
 else:
-    from collect import number, iso_date, cp, FEEDS
+    from collect import number, iso_date, cp, FEEDS, read_response
     from us_sources import US_FEEDS, COT_DATASETS, options_document, normalize_us
     from publication import save_text
     from trading_calendar import load_calendar
@@ -233,12 +233,21 @@ class Client:
         time.sleep(max(0,1.1-(time.monotonic()-self.last)))
         self.last=time.monotonic()
         req=Request(url,data=urlencode(fields).encode() if fields is not None else None,
-                    headers={'User-Agent':'Mozilla/5.0 (public derivatives history research)','Accept':'*/*'})
-        with urlopen(req,timeout=75) as response:
-            raw=response.read(60_000_001)
-            if len(raw)>60_000_000: raise ValueError('Historical response too large')
-            metadata={'url':url,'parameters':fields,'httpStatus':response.status,'contentType':response.headers.get('Content-Type'),
-                      'fetchedAt':datetime.now(timezone.utc).isoformat(timespec='seconds'),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+                    headers={'User-Agent':'Mozilla/5.0 (public derivatives history research)','Accept':'*/*','Accept-Encoding':'gzip'})
+        # These POSTs only request public dated reports. Retry the identical
+        # request on transient transport failures, never access refusals.
+        for attempt in range(3):
+            try:
+                deadline=time.monotonic()+120
+                with urlopen(req,timeout=40) as response:
+                    raw=read_response(response,60_000_000,deadline)
+                    metadata={'url':url,'parameters':fields,'httpStatus':response.status,'contentType':response.headers.get('Content-Type'),
+                              'fetchedAt':datetime.now(timezone.utc).isoformat(timespec='seconds'),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+                break
+            except (HTTPError,URLError,TimeoutError,ConnectionError) as exc:
+                code=getattr(exc,'code',None)
+                if attempt==2 or (code is not None and not 500<=code<600):raise
+                time.sleep(2*(attempt+1))
         metadata['path']=f"{ROOT}/sources/{metadata['sha256']}.raw.gz"
         write_gzip(self.output/metadata['path'],raw)
         # Cache only transport success; consumers still validate schema/date on every use.

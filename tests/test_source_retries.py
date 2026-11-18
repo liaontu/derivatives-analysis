@@ -5,7 +5,7 @@ import gzip
 import time
 from urllib.error import HTTPError
 import pytest
-from automation.derivatives import collect, option_history
+from automation.derivatives import collect, option_history, market_history, dated_latest
 
 
 def test_option_gateway_retry_stays_on_same_official_request(monkeypatch):
@@ -67,3 +67,46 @@ def test_slow_trickle_source_cannot_exceed_total_download_budget(monkeypatch):
     response=BytesIO(b'x'*100000);response.headers={}
     with pytest.raises(TimeoutError,match='total download deadline'):
         collect.read_response(response,200000,120)
+
+
+def test_history_gateway_retry_preserves_post_and_validates_cache(tmp_path,monkeypatch):
+    calls=[]
+    def open_request(request,**kwargs):
+        calls.append((request.full_url,request.data))
+        if len(calls)==1:raise HTTPError(request.full_url,520,'gateway',{},None)
+        response=BytesIO(gzip.compress(b'official dated report'))
+        response.headers={'Content-Encoding':'gzip','Content-Type':'text/csv'};response.status=200
+        return response
+    monkeypatch.setattr(market_history,'urlopen',open_request)
+    monkeypatch.setattr(market_history.time,'sleep',lambda _:None)
+    client=market_history.Client(tmp_path)
+    raw,proof=client.get('https://www.taifex.com.tw/cht/3/futDataDown',{'queryStartDate':'2026/11/18'})
+    assert raw==b'official dated report' and len(calls)==2 and calls[0]==calls[1]
+    client.accept(proof)
+    assert client.get(proof['url'],proof['parameters'])[0]==raw and len(calls)==2
+
+
+@pytest.mark.parametrize('code,count',[(401,1),(403,1),(429,1),(520,3)])
+def test_history_retry_stops_at_access_refusal_or_budget(tmp_path,monkeypatch,code,count):
+    calls=[]
+    def fail(request,**kwargs):
+        calls.append(request.full_url);raise HTTPError(request.full_url,code,'failure',{},None)
+    monkeypatch.setattr(market_history,'urlopen',fail)
+    monkeypatch.setattr(market_history.time,'sleep',lambda _:None)
+    with pytest.raises(HTTPError):market_history.Client(tmp_path).get('https://www.taifex.com.tw/cht/3/futDataDown',{})
+    assert len(calls)==count and not list(tmp_path.rglob('*.json'))
+
+
+def test_dated_otc_quotes_do_not_fabricate_terms_or_accept_wrong_day(tmp_path):
+    import json
+    fields=['代號','名稱','開市價','最高價','最低價','收市價','漲跌','成交量(股)','筆數','成交金額','標的代號','標的名稱','標的/指數收盤','標的/指數漲跌']
+    doc={'stat':'ok','date':'20261118','tables':[{'fields':fields,'data':[['712345','權證','1','2','1','1.5','0.5','2000','2','3000','6488','環球晶','500','1']]}]}
+    class Client:
+        def get(self,url,**kwargs):return json.dumps(doc).encode(),{'url':url}
+    fallback=object.__new__(dated_latest.DatedFallback)
+    fallback.client=Client();fallback.day='2026-11-18';fallback.now='2026-11-18T09:00:00Z';fallback.blocked=False
+    rows,proof=fallback.load('tpex-warrants',{})
+    assert rows[0]['date']=='2026-11-18' and rows[0]['volume']==2 and rows[0]['price']==1.5
+    assert 'strike' not in rows[0] and 'termsDate' not in rows[0] and '2026%2F11%2F18' in proof['url']
+    doc['date']='20261117'
+    with pytest.raises(ValueError,match='date/status'):fallback.load('tpex-warrants',{})
