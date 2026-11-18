@@ -147,6 +147,19 @@ def fetch(url):
     return request_bytes(cot_url(name) if name in COT_DATASETS else url, decode)
 
 
+def dated_warrant_volume(name, old, feeds, fetcher, now, today, calendar):
+    """Recover a failed latest table using the verified warrant quote date."""
+    quotes = feeds.get('twse-warrants', {})
+    day = quotes.get('date')
+    if quotes.get('status') != 'ok' or not day:
+        raise ValueError('No verified TWSE warrant date for volume recovery')
+    url = FEEDS[name][1] + '&date=' + day.replace('-', '')
+    raw = fetcher(url)
+    if not isinstance(raw, dict) or iso_date(raw.get('date')) != day:
+        raise ValueError('Dated TWSE volume does not match warrant quote date')
+    return update_feed(name, old, raw, now, today, calendar), url
+
+
 def normalize(name, raw):
     if name in US_FEEDS:
         return normalize_us(name, raw, number, iso_date)
@@ -388,6 +401,15 @@ def collect(output, fetcher=fetch, now=None, calendar_fetcher=None, dated_fallba
                     payload = update_feed(name, old, tasks[name].result(), now, today, calendar)
                 except Exception as exc:
                     primary_error, payload = exc, None
+                if payload is None and name in ('twse-volume', 'twse-volume-put', 'twse-volume-extra'):
+                    # Explicitly stop on access/rate-limit responses. An empty
+                    # latest report may be retried only for a verified date.
+                    if getattr(primary_error, 'code', None) not in (401, 403, 429):
+                        try:
+                            payload, source_url = dated_warrant_volume(name, old, feeds, fetcher, now, today, calendar)
+                            dated_check = {'requestedDate': payload['date'], 'status': 'verified', 'url': source_url}
+                        except Exception as exc:
+                            primary_error = ValueError(str(primary_error) + '; dated volume: ' + str(exc))
                 if dated and name in NAMES and (payload is None or payload['date'] < dated.day):
                     try:
                         rows, proof = dated.load(name, feeds)

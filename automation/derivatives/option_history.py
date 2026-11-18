@@ -19,6 +19,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError, URLError
 
 try:
     from .collect import number, iso_date, cp
@@ -122,8 +123,20 @@ def download(start, end):
               'queryStartDate': start.replace('-', '/'), 'queryEndDate': end.replace('-', '/')}
     request = urllib.request.Request(DOWNLOAD, data=urllib.parse.urlencode(params).encode(), headers={
         'User-Agent': 'DerivativeInsight/3.0 (free daily market research)', 'Referer': SOURCE})
-    with urllib.request.urlopen(request, timeout=90) as response:
-        raw = response.read(40_000_001)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                raw = response.read(40_000_001)
+            break
+        except HTTPError as exc:
+            # A transient gateway outage is not a missing trading day. Keep the
+            # same official endpoint and never retry access/rate-limit refusals.
+            if exc.code not in (408, 500, 502, 503, 504, 520, 522, 524) or attempt == 2:
+                raise
+        except (URLError, TimeoutError):
+            if attempt == 2:
+                raise
+        time.sleep(2 * (attempt + 1))
     if len(raw) > 40_000_000:
         raise ValueError('HISTORY_RESPONSE_TOO_LARGE')
     return raw
