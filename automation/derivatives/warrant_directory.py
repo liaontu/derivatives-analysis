@@ -117,9 +117,9 @@ def fetch_directory(url):
     key = next((k for k, value in MASTER.items() if value == url), 'unknown')
     try:
         if url == MASTER['listedIssues']:
-            # This 45+ MB endpoint can stream beyond two minutes on hosted runners.
-            # Two bounded five-minute attempts fit the existing 30-minute job.
-            result = c.request_bytes(url, c.decode, max_bytes=80_000_000, total_seconds=300, attempts=2)
+            # This 45+ MB stream can take over five minutes. Keep one bounded
+            # transfer instead of restarting it; the job still has a 30m limit.
+            result = c.request_bytes(url, c.decode, max_bytes=80_000_000, total_seconds=600, attempts=1)
         else:
             result = c.fetch(url)
         print('directory source:', key, 'rows:', len(result), 'seconds:', round(time.monotonic()-started, 1), flush=True)
@@ -175,7 +175,7 @@ def record_coverage(out,today=None):
                 item=tracked.get(r['code']);stat=counts[(r['date'],r['market'])]
                 if item and any(item.get(k)!=r.get(k) for k in ('market','underlying','name')):item=None
                 if item and item.get('status')=='ok' and item.get('date')==r['date']:
-                    key='zeroWithoutRank' if item.get('rankingState')=='no_trade' else 'ranked'
+                    key=('zeroWithoutRank' if r['volume']==0 else 'otherDateOrFailed') if item.get('rankingState')=='no_trade' else 'ranked'
                 elif item:key='otherDateOrFailed'
                 elif r['volume'] is None:key='unknownVolume'
                 elif r['volume']==0:key='zeroWithoutRank'

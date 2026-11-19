@@ -229,7 +229,7 @@
     {
       "path": "automation/derivatives/collect.py",
       "bytes": 31413,
-      "sha256": "13ef1f7820664204cc24ee527eb9d70654dff2f65156a742486fc667c82f55f5"
+      "sha256": "307d92f848d7932aae52494419bd37b4030d432ccf31667b81be0005d38b42e2"
     },
     {
       "path": "automation/derivatives/cross_market.py",
@@ -413,8 +413,8 @@
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 12320,
-      "sha256": "ea7040c82ef576a74555aaa9affd16ea3ffcfc4c1f61ad2ccfb59be3355e7a72"
+      "bytes": 12360,
+      "sha256": "3d097050a2b06e15794741d3513c43805be939e7bfbeb4974f6415de1e25371a"
     },
     {
       "path": "automation/derivatives/warrant_extra_history.py",

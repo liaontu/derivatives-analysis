@@ -140,7 +140,7 @@ def read_response(response, max_bytes, deadline):
 
 
 def request_bytes(url, transform=lambda raw: raw, *, max_bytes=40_000_000, total_seconds=120, attempts=3):
-    if type(attempts) is not int or not 1 <= attempts <= 3 or not 1 <= total_seconds <= 300:
+    if type(attempts) is not int or not 1 <= attempts <= 3 or not 1 <= total_seconds <= 600:
         raise ValueError('Invalid bounded public download configuration')
     request = urllib.request.Request(url, headers={
         "User-Agent": "DerivativeInsight/2.1 (daily public market research)",

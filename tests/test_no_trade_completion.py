@@ -126,3 +126,17 @@ def test_valid_empty_page_waits_one_hour_and_resumes_without_day_long_lock(tmp_p
     assert failure['retryAfter'] == '2026-10-24T13:00:00+00:00'
     assert w.collect(tmp_path, config, fetch, '2026-10-24T13:00:00+00:00', 0, lambda _: None) == []
     assert len(calls) == 4
+
+
+def test_revised_positive_volume_invalidates_earlier_no_trade_coverage(tmp_path):
+    from automation.derivatives import collect as c, warrant_directory as wd
+    from automation.derivatives.governance import digest
+    row={'code':'030001','underlying':'2409','date':'2026-11-19','market':'TWSE','name':'test','volume':10}
+    h=digest([row])
+    c.save(tmp_path/'stock-warrant-directory.json',{'status':'ok','checkedDay':row['date'],'items':[{'code':'2409','hash':h}]})
+    c.save(tmp_path/'stock-warrant-directory/2409.json',{'rows':[row],'hash':h})
+    c.save(tmp_path/'warrant-branches.json',{'status':'ok','items':[dict(row,volume=0,status='ok',rankingState='no_trade')]})
+    assert wd.record_coverage(tmp_path)
+    current=c.read(tmp_path/'stock-warrant-coverage.json')['current'][0]
+    assert current['otherDateOrFailed']==1
+    assert current.get('zeroWithoutRank',0)==current.get('ranked',0)==0
