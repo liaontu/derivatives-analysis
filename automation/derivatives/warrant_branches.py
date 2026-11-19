@@ -164,6 +164,11 @@ def parse_page(html, code):
             rows.append({'branchCode': branch, 'branchName': name, 'side': side, 'rank': counts[side],
                          'buy': float(buy), 'sell': float(sell), 'net': float(net), 'share': float(share),
                          'displayRoundingDifference': float(difference)})
+    if not rows and re.search(r'查無\([^()]*' + re.escape(code) + r'\)券商分點-進出明細', plain):
+        # An explicit empty page is evidence of absence of rankings, not yet
+        # evidence of zero trading. update_warrant requires same-day official zero.
+        return {'date': day, 'rows': [], 'rankingState': 'source_empty',
+                'completeBranchCoverage': False, 'missingBranchMeansZero': False}
     if not rows or max(counts.values()) > 15 or len({r['branchCode'] for r in rows}) != len(rows):
         raise ValueError('Empty, duplicate or unexpected rankings')
     for side in counts:
@@ -227,14 +232,27 @@ def update_warrant(quote, old, html, now, today, calendar=None):
     buy = sum(Decimal(str(r['buy'])) for r in current['rows'])
     sell = sum(Decimal(str(r['sell'])) for r in current['rows'])
     volume = quote.get('volume') if quote['date'] == current['date'] else None
+    empty = current.get('rankingState') == 'source_empty'
+    if empty:
+        if quote.get('market') not in ('TWSE', 'TPEX') or type(volume) not in (int, float) or volume != 0:
+            raise ValueError('Empty rankings require same-day official zero volume')
+        current['rankingState'] = 'no_trade'
+        current['noTradeEvidence'] = {'market': quote['market'], 'code': quote['code'],
+                                      'date': quote['date'], 'volume': volume,
+                                      'branchSourceStatement': '查無券商分點-進出明細'}
     current.update({'buyTotal': float(buy), 'sellTotal': float(sell), 'quoteDate': quote['date'], 'quoteVolume': volume,
                     'buyGap': float(Decimal(str(volume)) - buy) if volume is not None else None,
                     'sellGap': float(Decimal(str(volume)) - sell) if volume is not None else None})
+    if empty:
+        # No observed branch rows: don't render empty sums as measured rankings.
+        current.update(buyTotal=None, sellTotal=None, buyGap=None, sellGap=None)
     history = {d['date']: d for d in (old or {}).get('history', [])}
     history[current['date']] = current
     payload = {'code': quote['code'], 'date': current['date'], 'sourceUrl': source_url(quote['code']),
                'unit': '張', 'completeBranchCoverage': False, 'missingBranchMeansZero': False,
                'status': 'ok', 'fetchedAt': now, 'history': [history[d] for d in sorted(history, reverse=True)[:30]]}
+    if empty:
+        payload['rankingState'] = 'no_trade'
     # Identical rankings keep their first fetch time so the published file stays byte-stable.
     if old and all(old.get(k) == payload[k] for k in ('code', 'date', 'history')):
         payload['fetchedAt'] = old.get('fetchedAt') or now
@@ -347,11 +365,14 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
             if isinstance(exc, HTTPError) and exc.code in (401, 403, 429):
                 stopped = True
             print(json.dumps({'warrant': code, 'failureType': type(exc).__name__,
-                              'httpStatus': exc.code if isinstance(exc, HTTPError) else None}), flush=True)
+                              'httpStatus': exc.code if isinstance(exc, HTTPError) else None,
+                              'reason': str(exc)[:160]}), flush=True)
             errors.append(code)
             if code not in deferred:
                 count = failures.get(code, {}).get('count', 0) + 1
-                failures[code] = {'count': count}
+                failures[code] = {'count': count, 'failureType': type(exc).__name__,
+                                  'httpStatus': exc.code if isinstance(exc, HTTPError) else None,
+                                  'reason': str(exc)[:160]}
                 if count >= 3:
                     failures[code]['retryAfter'] = (datetime.fromisoformat(now)+timedelta(hours=24)).isoformat(timespec='seconds')
             if code in failed_deferred:
@@ -367,7 +388,8 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
         items.append({**{k: quote.get(k) for k in ('code', 'name', 'market', 'cp', 'underlying', 'underlyingName', 'volume')},
                       'quoteDate': quote['date'], 'date': payload['date'], 'status': payload['status'], 'error': error,
                       'fetchedAt': payload['fetchedAt'], 'fixed': code in config['watchlist'],
-                      'count': len(payload['history'][0]['rows']) if payload['history'] else 0})
+                      'count': len(payload['history'][0]['rows']) if payload['history'] else 0,
+                      **({'rankingState': payload['rankingState']} if payload.get('rankingState') else {})})
         print(json.dumps({'warrant': code, 'date': payload['date'], 'status': payload['status']}, ensure_ascii=False), flush=True)
     remaining = list(dict.fromkeys([c for c in pending if c not in {q['code'] for q in selected}] + errors))
     # Keep the oldest backlog bounded and report overflow rather than growing forever.

@@ -139,20 +139,22 @@ def read_response(response, max_bytes, deadline):
     return b''.join(parts)
 
 
-def request_bytes(url, transform=lambda raw: raw, *, max_bytes=40_000_000):
+def request_bytes(url, transform=lambda raw: raw, *, max_bytes=40_000_000, total_seconds=120, attempts=3):
+    if type(attempts) is not int or not 1 <= attempts <= 3 or not 1 <= total_seconds <= 300:
+        raise ValueError('Invalid bounded public download configuration')
     request = urllib.request.Request(url, headers={
         "User-Agent": "DerivativeInsight/2.1 (daily public market research)",
         "Accept": "application/json,text/csv,text/html;q=0.9,*/*;q=0.5",
         "Accept-Encoding": "gzip",
     })
-    for attempt in range(3):
+    for attempt in range(attempts):
         try:
-            deadline = time.monotonic() + 120
+            deadline = time.monotonic() + total_seconds
             with urllib.request.urlopen(request, timeout=40) as response:
                 raw = read_response(response, max_bytes, deadline)
             return transform(raw)
         except Exception as exc:
-            if getattr(exc, 'code', None) in (401, 403, 429) or attempt == 2:
+            if getattr(exc, 'code', None) in (401, 403, 429) or attempt == attempts - 1:
                 raise
             time.sleep(2 * (attempt + 1))
 

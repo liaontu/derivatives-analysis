@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 import re
+import time
 try:
     from . import collect as c
     from .governance import digest
@@ -112,9 +113,20 @@ def fetch_directory(url):
     # The official JSON has the same dated fields as the large MOPS CSV.
     # Its verbose keys made the verified 2026-11-12 response about 45 MB;
     # keep an explicit bound for this endpoint without relaxing other feeds.
-    if url == MASTER['listedIssues']:
-        return c.request_bytes(url, c.decode, max_bytes=80_000_000)
-    return c.fetch(url)
+    started = time.monotonic()
+    key = next((k for k, value in MASTER.items() if value == url), 'unknown')
+    try:
+        if url == MASTER['listedIssues']:
+            # This 45+ MB endpoint can stream beyond two minutes on hosted runners.
+            # Two bounded five-minute attempts fit the existing 30-minute job.
+            result = c.request_bytes(url, c.decode, max_bytes=80_000_000, total_seconds=300, attempts=2)
+        else:
+            result = c.fetch(url)
+        print('directory source:', key, 'rows:', len(result), 'seconds:', round(time.monotonic()-started, 1), flush=True)
+        return result
+    except Exception as exc:
+        print('directory source failed:', key, type(exc).__name__, str(exc)[:160], flush=True)
+        raise
 
 
 def publish(out,today=None,fetcher=fetch_directory):
@@ -162,7 +174,8 @@ def record_coverage(out,today=None):
             for r in shard['rows']:
                 item=tracked.get(r['code']);stat=counts[(r['date'],r['market'])]
                 if item and any(item.get(k)!=r.get(k) for k in ('market','underlying','name')):item=None
-                if item and item.get('status')=='ok' and item.get('date')==r['date']:key='ranked'
+                if item and item.get('status')=='ok' and item.get('date')==r['date']:
+                    key='zeroWithoutRank' if item.get('rankingState')=='no_trade' else 'ranked'
                 elif item:key='otherDateOrFailed'
                 elif r['volume'] is None:key='unknownVolume'
                 elif r['volume']==0:key='zeroWithoutRank'

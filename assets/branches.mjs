@@ -7,6 +7,7 @@ export function filterRankings(rows, query = '', side = '') {
   return rows.filter(r => (!side || r.side === side) && (!q || `${r.branchCode} ${r.branchName}`.toLowerCase().includes(q)));
 }
 export function comparisonLabel(day) {
+  if (day?.rankingState === 'no_trade') return '同日官方成交量為 0 張，來源明示查無分點明細；記錄為當日無成交。未建立任何分點零值，歷史排行仍保留。';
   if (!finite(day?.quoteVolume)) return '日期不一致或官方成交量缺值，暫不比較。';
   if (day.buyGap === 0 && day.sellGap === 0) return '本日排行買賣合計與官方成交量相符；仍不代表此來源提供全部分點。';
   return `官方成交量 ${fmt(day.quoteVolume, 3)} 張；與排行買進合計差 ${fmt(day.buyGap, 3)} 張、賣出合計差 ${fmt(day.sellGap, 3)} 張。口徑差異或排行缺漏均可能造成差額。`;
@@ -15,7 +16,7 @@ export function comparisonLabel(day) {
 export function createWarrantBranches({ load, table, tr, select, dateTag, signed, metric, empty }) {
   const state = { query: '', branch: '', day: '', page: 0, listOpen: false };
   let exportRows = [], exportCode = '', exportDay = '';
-  const status = item => ({ ok: '更新成功', retained: '更新失敗・保留舊值', unavailable: '暫無資料' }[item.status] || '等待更新');
+  const status = item => item.status === 'ok' && item.rankingState === 'no_trade' ? '已核實・當日無成交' : ({ ok: '更新成功', retained: '更新失敗・保留舊值', unavailable: '暫無資料' }[item.status] || '等待更新');
   const external = code => `<a class="text-link" href="${branchSourceUrl(code)}" target="_blank" rel="noopener noreferrer">富邦原始排行 ↗</a>`;
   const link = code => `#warrant-branches?code=${encodeURIComponent(code)}`;
 

@@ -58,8 +58,8 @@
     },
     {
       "path": "assets/branches.mjs",
-      "bytes": 12569,
-      "sha256": "d148886b7d20df0a2e355c1ef0b2960883e6150babdce25453220978a87eb46c"
+      "bytes": 12858,
+      "sha256": "eb42467939286f69681d971a1a81111709953010f5971e082a7f6a1dfc47f5ce"
     },
     {
       "path": "assets/catalog.mjs",
@@ -228,8 +228,8 @@
     },
     {
       "path": "automation/derivatives/collect.py",
-      "bytes": 31187,
-      "sha256": "649e03b93642f92c3ec7199b9a7bef5f153142b339c3c250597b775765119aea"
+      "bytes": 31413,
+      "sha256": "13ef1f7820664204cc24ee527eb9d70654dff2f65156a742486fc667c82f55f5"
     },
     {
       "path": "automation/derivatives/cross_market.py",
@@ -403,8 +403,8 @@
     },
     {
       "path": "automation/derivatives/warrant_branches.py",
-      "bytes": 23981,
-      "sha256": "3d42915256dc9496540df81c79874a22fe7cf802a2d4791eaa0e991f40480f7f"
+      "bytes": 25571,
+      "sha256": "5ed8da3389fa8ebb84b8a7b5a25c727cc2e986a9c726008a5a0c726b673bcfd0"
     },
     {
       "path": "automation/derivatives/warrant_catalog.py",
@@ -413,8 +413,8 @@
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 11596,
-      "sha256": "6b025360a1bdccad8fe21dd83aa832a9c3eaa1c8c5a07c16b62bafbf99836bc6"
+      "bytes": 12320,
+      "sha256": "ea7040c82ef576a74555aaa9affd16ea3ffcfc4c1f61ad2ccfb59be3355e7a72"
     },
     {
       "path": "automation/derivatives/warrant_extra_history.py",
