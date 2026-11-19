@@ -348,8 +348,8 @@
     },
     {
       "path": "automation/derivatives/stock_institutional.py",
-      "bytes": 10330,
-      "sha256": "af873bd177ae1f59e60feb030c5faf07f92e8717ac39391302491000450e746d"
+      "bytes": 14348,
+      "sha256": "d39be3b7786513f1b6dd05818404ebab4679d75a3439bd79fd58de7b8fdfc160"
     },
     {
       "path": "automation/derivatives/stock_options.py",

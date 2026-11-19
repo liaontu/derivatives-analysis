@@ -20,6 +20,59 @@ URLS = {
     'TPEX':'https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?date={slash}&type=Daily&response=json'}
 
 
+def verified_membership(output, now):
+    """Membership does not require the optional, large warrant issuance file."""
+    try:
+        from . import collect as quotes, supplement_sources as supplement
+    except ImportError:
+        import collect as quotes, supplement_sources as supplement
+    index=read(output/'market-supplement.json')
+    current=datetime.fromisoformat(now).astimezone(timezone.utc)
+    today=current.astimezone(timezone(timedelta(hours=8))).date()
+    urls={'TWSE':'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
+          'TPEX':'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O'}
+    members={};evidence=[]
+    def checked_file(entry,compressed=False):
+        path=(output/entry['path']).resolve()
+        if not path.is_relative_to(output.resolve()):raise ValueError('Unsafe membership evidence path')
+        raw=path.read_bytes();raw=gzip.decompress(raw) if compressed else raw
+        if hashlib.sha256(raw).hexdigest()!=entry['sha256']:raise ValueError('Membership evidence hash mismatch')
+        return raw if compressed else json.loads(raw)
+    for market,url in urls.items():
+        key='companies-'+market;entry=index.get('documents',{}).get(key,{})
+        if entry.get('status')!='ok':raise ValueError('Verified company roster missing: '+market)
+        doc=checked_file(entry);proof=entry['source']
+        if doc.get('id')!=key or doc.get('evidence')!=proof or proof.get('url')!=url or proof.get('httpStatus')!=200 or proof.get('validated') is not True:
+            raise ValueError('Company roster provenance mismatch')
+        age=(current-datetime.fromisoformat(proof['fetchedAt']).astimezone(timezone.utc)).total_seconds()
+        if not 0<=age<=86400:raise ValueError('Company roster check must be within 24 hours')
+        raw=checked_file(proof,True)
+        dates={quotes.iso_date(r.get('出表日期' if market=='TWSE' else 'Date')) for r in json.loads(raw)}
+        if len(dates)!=1 or None in dates:raise ValueError('Company roster date missing or ambiguous')
+        reported=dates.pop()
+        if not 0<=(today-date.fromisoformat(reported)).days<=14:raise ValueError('Company roster date stale or future')
+        rows=supplement.companies(raw,market)
+        if rows!=doc.get('rows'):raise ValueError('Company roster does not match its raw evidence')
+        for row in rows:
+            if row['code'] in members:raise ValueError('Ambiguous cross-market company identity')
+            members[row['code']]=row
+        evidence.append({'market':market,'reportedDate':reported,'normalized':entry,'raw':proof})
+    feeds={r['id']:r for r in read(output/'manifest.json')['sources']}
+    required=[feeds[k] for k in ('twse-warrants','tpex-warrants')]
+    if any(r.get('status')!='ok' for r in required) or len({r['date'] for r in required})!=1:
+        raise ValueError('Current warrant quote dates are not verified and aligned')
+    quote_day=required[0]['date']
+    if not load_calendar(output).fresh(quote_day,today):raise ValueError('Warrant quote membership is stale')
+    catalog=quotes.read(output/'warrants.json')['rows']
+    linked={r.get('underlying') for r in catalog if r.get('date')==quote_day
+            and r.get('market') in urls and r.get('cp') in ('C','P') and re.fullmatch(r'\d{5}[0-9A-Z]',r.get('code',''))}
+    items=[members[code] for code in sorted(linked & members.keys())]
+    if not items:raise ValueError('No verified ordinary-stock warrant underlyings')
+    return {'status':'ok','checkedDay':today.isoformat(),'items':items,
+            'membershipBasis':'verified-company-rosters-and-current-warrant-quotes',
+            'membershipSources':evidence,'membershipQuoteDate':quote_day}
+
+
 def integer(value):
     text = str(value).replace(',','').strip()
     if not re.fullmatch(r'-?\d+',text):raise ValueError('Missing or invalid institutional volume')
@@ -78,7 +131,7 @@ def enrich(output, rows, day):
 
 def snapshot(output, day, directory, cache=None, fetcher=fetch_public, now=None, mode='daily'):
     now=now or datetime.now(timezone.utc).isoformat(timespec='seconds')
-    if directory.get('status')!='ok':raise ValueError('Current ordinary-stock directory is not verified')
+    if directory.get('status')!='ok':directory=verified_membership(output,now)
     members={r['code'] for r in directory['items']}
     all_rows=[];sources=[];errors=[];blocked=False
     old_path=output/'stock-institutional'/(day+'.json')
@@ -111,8 +164,10 @@ def snapshot(output, day, directory, cache=None, fetcher=fetch_public, now=None,
     if errors:return {'date':day,'status':'unavailable','sources':sources,'error':'; '.join(errors),'blocked':blocked}
     report={'schemaVersion':2,'date':day,'status':'ok','unit':'股','sources':sources,'rows':all_rows,
             'firstRecordedAt':old.get('firstRecordedAt') or now,'acquisitionMode':old.get('acquisitionMode') or mode,
-            'membership':{'date':directory.get('checkedDay'),'basis':'current-warrant-underlying-directory',
-                          'sha256':hashlib.sha256(json.dumps(sorted(members)).encode()).hexdigest()},
+            'membership':{'date':directory.get('checkedDay'),'basis':directory.get('membershipBasis','current-warrant-underlying-directory'),
+                          'sha256':hashlib.sha256(json.dumps(sorted(members)).encode()).hexdigest(),
+                          **({'sources':directory['membershipSources'],'quoteDate':directory['membershipQuoteDate']}
+                             if directory.get('membershipSources') else {})},
             'coverage':{'matchedStocks':len(all_rows),'directoryStocks':len(members),'missingStocks':sorted(members-{r['code'] for r in all_rows})},
             'limitations':['僅普通股權證標的，按本次名錄核對；上市與上櫃交易統計範圍依原報表，跨市場不直接合併排名。',
                            '外資不含外資自營商；自營商總額已含自行買賣與避險，分項不再重複加總。單位為股。',
@@ -147,7 +202,10 @@ def collect(output, cache=None, fetcher=fetch_public, now=None):
     now=now or datetime.now(timezone.utc).isoformat(timespec='seconds')
     feeds={s['id']:s for s in read(output/'manifest.json')['sources']}
     dates={feeds[k]['date'] for k in ('twse-warrants','tpex-warrants')}
-    report=snapshot(output,next(iter(dates)),read(output/'stock-warrant-directory.json'),cache,fetcher,now) if len(dates)==1 else {'status':'unavailable','error':'Two market dates differ; no mixed-day report','sources':[]}
+    try:
+        report=snapshot(output,next(iter(dates)),read(output/'stock-warrant-directory.json'),cache,fetcher,now) if len(dates)==1 else {'status':'unavailable','error':'Two market dates differ; no mixed-day report','sources':[]}
+    except (ValueError,KeyError,OSError) as exc:
+        report={'status':'unavailable','error':str(exc)[:200],'sources':[]}
     if report['status']!='ok':
         path=output/'stock-institutional.json';old=read(path) if path.exists() else {'dates':[]}
         result={**old,'status':'retained' if old.get('dates') else 'unavailable','checkedAt':now,
