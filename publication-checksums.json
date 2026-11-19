@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/derivatives-daily.yml",
-      "bytes": 8892,
-      "sha256": "6b5582dbbbe3ee2ceb9d6b0f9bba3f7359cc424f945558a233a9bddbfbd78972"
+      "bytes": 8974,
+      "sha256": "84a36be6d02545d8af1723d975e1a281f60603ee591ee6e2e3ab7401ee4d4abb"
     },
     {
       "path": ".github/workflows/derivatives-series-reports.yml",
@@ -247,6 +247,11 @@
       "sha256": "30c6e6cac0b4e293a502ef824f85fbcc57ee3430c6357b037d4f1181ff181e9d"
     },
     {
+      "path": "automation/derivatives/dated_latest.py",
+      "bytes": 6274,
+      "sha256": "5bae6315ec85684dcefdf0e79c18cc9ee528cfb77e043dc804e655091a361f5a"
+    },
+    {
       "path": "automation/derivatives/derivative_period.py",
       "bytes": 23149,
       "sha256": "32dda2b2ede0f479266e9feef64eb453581955174197ed6aba091459da0f4f7c"
@@ -298,8 +303,8 @@
     },
     {
       "path": "automation/derivatives/market_history.py",
-      "bytes": 27112,
-      "sha256": "78c22de02f648449516b2c74165434433886d8843bff1fd713fb72f40ce1bcf2"
+      "bytes": 27655,
+      "sha256": "a5d169bde27b3eeec03a8e65c170b0d843b03acd5726f3c8da5cd94454e74605"
     },
     {
       "path": "automation/derivatives/option_history.py",
@@ -398,8 +403,8 @@
     },
     {
       "path": "automation/derivatives/warrant_branches.py",
-      "bytes": 23793,
-      "sha256": "8001ffd2d1c4cd30b66c661a45e74cc68a8460e939d1d29dc99d2c79f6ef3213"
+      "bytes": 23981,
+      "sha256": "3d42915256dc9496540df81c79874a22fe7cf802a2d4791eaa0e991f40480f7f"
     },
     {
       "path": "automation/derivatives/warrant_catalog.py",
@@ -490,11 +495,6 @@
       "path": "index.html",
       "bytes": 4483,
       "sha256": "535a28ba50a99c1793c287ed53f8e25c1882d6d8b2ebc5afbaf6fdbcc5423f54"
-    },
-    {
-      "path": "automation/derivatives/dated_latest.py",
-      "bytes": 4739,
-      "sha256": "16d8528b0f0fef4f2e4b5c7a65261bdb6c725648483a8576f5e700398b033f3e"
     }
   ]
 }
