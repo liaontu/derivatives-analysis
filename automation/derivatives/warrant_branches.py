@@ -224,6 +224,10 @@ def select_warrants(catalog, config, today, calendar=None):
     return selected, issues
 
 
+class AwaitingRankings(ValueError):
+    """Validated empty page awaiting same-day official/branch publication."""
+
+
 def update_warrant(quote, old, html, now, today, calendar=None):
     current = parse_page(html, quote['code'])
     day = date.fromisoformat(current['date'])
@@ -235,7 +239,7 @@ def update_warrant(quote, old, html, now, today, calendar=None):
     empty = current.get('rankingState') == 'source_empty'
     if empty:
         if quote.get('market') not in ('TWSE', 'TPEX') or type(volume) not in (int, float) or volume != 0:
-            raise ValueError('Empty rankings require same-day official zero volume')
+            raise AwaitingRankings('Empty rankings require same-day official zero volume')
         current['rankingState'] = 'no_trade'
         current['noTradeEvidence'] = {'market': quote['market'], 'code': quote['code'],
                                       'date': quote['date'], 'volume': volume,
@@ -373,7 +377,12 @@ def collect(output, config, fetcher=fetch, now=None, delay=2, sleeper=time.sleep
                 failures[code] = {'count': count, 'failureType': type(exc).__name__,
                                   'httpStatus': exc.code if isinstance(exc, HTTPError) else None,
                                   'reason': str(exc)[:160]}
-                if count >= 3:
+                if isinstance(exc, AwaitingRankings):
+                    # A valid empty page is not a broken parser. Permit the next
+                    # scheduled check after one hour, not a rolling 24-hour lock.
+                    # Continuation batches still never retry failed items.
+                    failures[code]['retryAfter'] = (datetime.fromisoformat(now)+timedelta(hours=1)).isoformat(timespec='seconds')
+                elif count >= 3:
                     failures[code]['retryAfter'] = (datetime.fromisoformat(now)+timedelta(hours=24)).isoformat(timespec='seconds')
             if code in failed_deferred:
                 error = (old or {}).get('error') or '來源暫不可用、日期異常或欄位改變'

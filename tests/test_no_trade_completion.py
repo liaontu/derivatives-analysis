@@ -108,3 +108,21 @@ def test_coverage_is_date_aligned_partition_and_preserves_history(tmp_path):
     assert not wd.record_coverage(tmp_path)
     held=c.read(tmp_path/'stock-warrant-coverage.json')
     assert held['status']=='retained' and held['history']==data['history']
+
+
+def test_valid_empty_page_waits_one_hour_and_resumes_without_day_long_lock(tmp_path):
+    w.save(tmp_path/'warrants.json', {'rows': [quote()]})
+    calls = []
+    def fetch(url):
+        if url.endswith('/robots.txt'):
+            return 'User-agent: *\nAllow: /'
+        calls.append(url)
+        return empty_fixture() if len(calls) <= 3 else fixture()
+    config = {'topCount': 1, 'watchlist': []}
+    for clock in ('10:00', '10:30', '11:00', '12:00'):
+        assert w.collect(tmp_path, config, fetch, f'2026-10-24T{clock}:00+00:00', 0, lambda _: None) == ['081105']
+    failure = w.read(tmp_path/'warrant-branches.json')['progress']['failures']['081105']
+    assert len(calls) == 3 and failure['failureType'] == 'AwaitingRankings'
+    assert failure['retryAfter'] == '2026-10-24T13:00:00+00:00'
+    assert w.collect(tmp_path, config, fetch, '2026-10-24T13:00:00+00:00', 0, lambda _: None) == []
+    assert len(calls) == 4
