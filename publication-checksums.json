@@ -413,8 +413,8 @@
     },
     {
       "path": "automation/derivatives/warrant_directory.py",
-      "bytes": 12360,
-      "sha256": "3d097050a2b06e15794741d3513c43805be939e7bfbeb4974f6415de1e25371a"
+      "bytes": 12708,
+      "sha256": "f65ef1dcd32844884a0f5f4b2e9b2dab13e946acb21bceac53c7b1aee4b46cb1"
     },
     {
       "path": "automation/derivatives/warrant_extra_history.py",

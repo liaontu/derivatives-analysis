@@ -120,6 +120,11 @@ def fetch_directory(url):
             # This 45+ MB stream can take over five minutes. Keep one bounded
             # transfer instead of restarting it; the job still has a 30m limit.
             result = c.request_bytes(url, c.decode, max_bytes=80_000_000, total_seconds=600, attempts=1)
+        elif url == MASTER['otcIssues']:
+            # TPEx serves this table uncompressed: 18,967,144 bytes on
+            # 2026-11-19, 98 s from Taipei. Three 120 s attempts each restarted
+            # it from zero, so give it the same single bounded transfer.
+            result = c.request_bytes(url, c.decode, total_seconds=600, attempts=1)
         else:
             result = c.fetch(url)
         print('directory source:', key, 'rows:', len(result), 'seconds:', round(time.monotonic()-started, 1), flush=True)
